@@ -406,8 +406,16 @@ export function sugestaoRacao(lotes, resumo, tabela) {
   return { kg, biomassaKg: bio, pct: taxas.size === 1 ? [...taxas][0] : (kg / bio) * 100, provisoria };
 }
 
-// Ração de cada lote: alevinagem usa ração de alevino; as outras fases, a de engorda (igual ao sql/17).
-export const tipoRacaoDoLote = (tipoLote) => (tipoLote === 'alevinagem' ? 'alevino' : 'engorda');
+// Ração de cada lote: berçário e alevinagem usam ração de alevino; recria e engorda, a de engorda (igual ao sql/18).
+export const tipoRacaoDoLote = (tipoLote) => (tipoLote === 'alevinagem' || tipoLote === 'bercario' ? 'alevino' : 'engorda');
+
+// Preço do kg da ração que ESTE lote come: média das compras daquele tipo (alevino é mais cara que engorda).
+// Sem compra com valor daquele tipo (ou compras antigas sem tipo), usa a média de todas.
+export function precoRacaoDoLote(compras, tipoLote) {
+  const tipo = tipoRacaoDoLote(tipoLote);
+  const doTipo = (compras || []).filter((c) => (c.tipo_racao || 'engorda') === tipo);
+  return precoMedioKg(doTipo) ?? precoMedioKg(compras || []);
+}
 
 // Quanto falta no estoque registrado para cobrir um lançamento de ração (kg). O saldo do servidor ainda não conta o que
 // está na fila do celular sem enviar, por isso desconta os pendentes. 0 = o estoque cobre; null = saldo desconhecido.

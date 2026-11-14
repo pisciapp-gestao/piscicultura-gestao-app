@@ -3,7 +3,7 @@
 // Recebe o construtor jsPDF (com o plugin autoTable aplicado) e, opcionalmente, as fontes
 // em base64 { regular, bold } (Schibsted Grotesk). Sem fontes, usa Helvetica.
 import { fmtNum, fmtInt, fmtData, fmtBRL, fmtPct, ROTULO_TIPO, diasEntre, plural } from './util.js';
-import { pesoMedioKg } from './calc.js';
+import { pesoMedioKg, avaliarAgua, ehTambaqui } from './calc.js';
 
 export const COR = {
   tinta: [23, 33, 29], mudo: [118, 130, 123], linha: [214, 223, 218], rio: [14, 79, 69], fundo: [240, 246, 243], fundo2: [231, 240, 235],
@@ -66,6 +66,9 @@ export { rodape, TOPO, BASE };
 
 export function gerarPdfLote(jsPDF, d) {
   const { fazenda, lote, nomeTanque, c, bios, mort, evo, semanas, kgSaco, gerir, geradoEm, fontes } = d;
+  const agua = d.agua || [];
+  const encerrado = !lote.ativo;
+  const pesoTxt = (g) => (g >= 1000 ? `${n(g / 1000, 2)} kg` : `${n(g, g < 10 ? 1 : 0)} g`); // 2,30 kg, não 2300 g
   const dinheiro = d.dinheiro ?? gerir; // valores em R$ só para o dono
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
   prepararFontes(doc, fontes);
@@ -116,9 +119,9 @@ export function gerarPdfLote(jsPDF, d) {
   const ind = [
     ['Dias de cultivo', fmtInt(c.diasCultivo), 'dias', `desde ${fmtData(lote.data_entrada)}`],
     ['Peso médio atual', c.pmAtualG != null ? (c.pmAtualG >= 1000 ? n(c.pmAtualG / 1000, 2) : n(c.pmAtualG, 0)) : '-', c.pmAtualG != null ? (c.pmAtualG >= 1000 ? 'kg' : 'g') : '', c.dataUltimaBio ? `biometria de ${fmtData(c.dataUltimaBio)}` : 'sem biometria'],
-    ['Peixes vivos', fmtInt(c.vivos), 'estim.', `de ${fmtInt(lote.quantidade_inicial)} na entrada`],
+    encerrado && c.despescados ? ['Peixes retirados', fmtInt(c.despescados), '', `de ${fmtInt(lote.quantidade_inicial)} na entrada`] : ['Peixes vivos', fmtInt(c.vivos), 'estim.', `de ${fmtInt(lote.quantidade_inicial)} na entrada`],
     ['Sobrevivência', c.sobrevivencia != null ? fmtPct(c.sobrevivencia) : '-', '%', `${plural(c.mortos, 'morto', 'mortos')}`],
-    ['Biomassa', c.biomassaAtual != null ? n(c.biomassaAtual, 0) : '-', c.biomassaAtual != null ? 'kg' : '', `na entrada: ${n(c.biomassaInicial, 0)} kg`],
+    encerrado && c.despescados ? ['Peso retirado', n(c.pesoDespescado, 0), 'kg', `na entrada: ${n(c.biomassaInicial, 0)} kg`] : ['Biomassa', c.biomassaAtual != null ? n(c.biomassaAtual, 0) : '-', c.biomassaAtual != null ? 'kg' : '', `na entrada: ${n(c.biomassaInicial, 0)} kg`],
     ['Ração fornecida', n(c.racaoTotal, 0), 'kg', `${n(c.racaoTotal / kgSaco, 1)} sacos de ${n(kgSaco, 0)} kg`],
     ['Conversão alimentar', c.ca != null ? n(c.ca, 2) : '-', '', c.ca != null ? 'kg de ração por kg ganho' : c.caAguardaPesagem ? 'aparece após a próxima pesagem' : 'precisa de biometria'],
     ['Ganho diário', c.gpd != null ? n(c.gpd, 1) : '-', c.gpd != null ? 'g/dia' : '', 'por peixe desde a entrada'],
@@ -147,9 +150,12 @@ export function gerarPdfLote(jsPDF, d) {
   // ---------- 2. observações ----------
   const obs = [];
   obs.push(['Crescimento', c.pmAtualG != null
-    ? `Peso médio de ${n(c.pmInicialG, 1)} g na entrada para ${n(c.pmAtualG, 0)} g em ${fmtData(c.dataUltimaBio)}${c.gpd != null ? ` (${n(c.gpd, 1)} g por dia por peixe)` : ''}.`
+    ? `Peso médio de ${pesoTxt(c.pmInicialG)} na entrada para ${pesoTxt(c.pmAtualG)} em ${fmtData(c.dataUltimaBio)}${c.gpd != null ? ` (${n(c.gpd, 1)} g por dia por peixe)` : ''}.`
     : 'Sem biometria registrada. Pese uma amostra para calcular peso médio, biomassa e conversão alimentar.']);
-  obs.push(['Sobrevivência', `${plural(c.mortos, 'morte', 'mortes')} em ${fmtInt(lote.quantidade_inicial)} peixes (${fmtPct(100 - (c.sobrevivencia ?? 100))}%). Restam cerca de ${fmtInt(c.vivos)}.`]);
+  const qi = Number(lote.quantidade_inicial) || 0;
+  obs.push(['Sobrevivência', encerrado && c.despescados
+    ? `${plural(c.mortos, 'morte registrada', 'mortes registradas')}. Na despesca total saíram ${fmtInt(c.despescados)} de ${fmtInt(qi)} peixes (${fmtPct(c.sobrevivencia ?? 0)}% de sobrevivência).`
+    : `${plural(c.mortos, 'morte', 'mortes')} em ${fmtInt(qi)} peixes (${fmtPct(qi > 0 ? (c.mortos / qi) * 100 : 0)}%). Restam cerca de ${fmtInt(c.vivos)}.`]);
   if (c.despescados) obs.push(['Despesca', `${plural(c.despescados, 'peixe retirado', 'peixes retirados')}, ${n(c.pesoDespescado, 0)} kg de peso bruto.`]);
   obs.push(['Ração', `${n(c.racaoTotal, 0)} kg fornecidos (${n(c.racaoTotal / kgSaco, 1)} sacos de ${n(kgSaco, 0)} kg)${c.racaoMediaDia != null ? `, média de ${n(c.racaoMediaDia, 1)} kg por dia` : ''}.`]);
   if (c.ca != null) obs.push(['Conversão', `${n(c.ca, 2)} kg de ração por kg de peixe ganho até a última biometria. Referência usual: 1,2 a 2,0, conforme espécie e fase.`]);
@@ -223,6 +229,20 @@ export function gerarPdfLote(jsPDF, d) {
     if (todas.length > lim.length) { txt(`Mostrando os ${lim.length} registros mais recentes de ${todas.length}.`, M, y + 2, { size: 7.5, color: COR.mudo }); y += 6; }
     y += 7;
   } else { txt('Nenhuma mortalidade registrada.', M, y + 1, { size: 9, color: COR.mudo }); y += 10; }
+
+  // ---------- qualidade da água (quando houver medição) ----------
+  if (agua.length) {
+    secao('Qualidade da água', 44);
+    const v = (x, dd) => (x == null || x === '' ? '-' : n(Number(x), dd));
+    const tam = ehTambaqui(lote.especie);
+    const ult = agua.slice(-20).reverse();
+    const corpo = ult.map((a) => [`${fmtData(a.data)}${a.hora ? ' ' + a.hora : ''}`, v(a.oxigenio_mgl, 1), v(a.temperatura_c, 1), v(a.ph, 1), v(a.amonia_mgl, 2), tam && avaliarAgua(a).length ? avaliarAgua(a).map((x) => x.texto.split(' (')[0]).join(', ') : '-']);
+    tabela(doc, y, [['DATA', 'OXIGÊNIO (mg/L)', 'TEMP. (°C)', 'pH', 'AMÔNIA (mg/L)', 'SITUAÇÃO']], corpo, ['left', 'right', 'right', 'right', 'right', 'left']);
+    y = doc.lastAutoTable.finalY + 3;
+    const nota = `${agua.length > ult.length ? `Mostrando as ${ult.length} medições mais recentes de ${agua.length}. ` : ''}${tam ? 'Faixas do tambaqui: oxigênio de 4 a 8 mg/L, temperatura de 28 a 30 °C, pH de 5 a 7 e amônia tóxica abaixo de 0,46 mg/L (Embrapa, 2018).' : ''}`;
+    if (nota) { const ls = quebra(nota, LARG, 7.5, false); txt(ls, M, y + 2, { size: 7.5, color: COR.mudo }); y += ls.length * 3.4 + 2; }
+    y += 7;
+  }
 
   // ---------- comparação com ciclos anteriores (quando houver ciclo encerrado) ----------
   if (d.cmp) {

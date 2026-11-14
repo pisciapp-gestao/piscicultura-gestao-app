@@ -1,6 +1,6 @@
 // Lucro por ciclo e despesas gerais (só o dono: valores em R$; precisam de internet).
 import { esc, fmtData, fmtInt, fmtNum, fmtBRL, hojeISO, numDecimal, numMoeda, moedaCampo, ROTULO_TIPO, nomeArquivo, dataArquivo } from '../util.js';
-import { calcularLote, fimDoLote, precoMedioKg, pesoProduzido, ratearDespesas, fecharCiclo } from '../calc.js';
+import { calcularLote, fimDoLote, precoRacaoDoLote, pesoProduzido, ratearDespesas, fecharCiclo } from '../calc.js';
 import { CATEGORIAS_DESPESA } from '../config.js';
 import { confirmar, formulario } from '../dialogo.js';
 import { carregarGerador, carregarFontes, abrirVisualizador } from '../pdf_ui.js';
@@ -19,7 +19,6 @@ export async function renderLucro(ctx, el) {
   const [lotes, compras, despesas, custos] = await Promise.all([ctx.api.lotes(), ctx.api.compras(true).catch(() => []), ctx.api.despesasGerais(), ctx.api.custosLote()]);
   if (!despesas || !custos) return faltaSql(el, T);
   const hoje = hojeISO();
-  const precoKg = precoMedioKg(compras);
   const tanques = ctx.state.ref.tanques;
   const nomeDe = (tid) => (tanques.find((t) => t.id === tid) || {}).nome || 'Tanque';
   const custoDe = Object.fromEntries(custos.map((x) => [x.lote_id, Number(x.custo_alevino)]));
@@ -27,7 +26,7 @@ export async function renderLucro(ctx, el) {
     const d = await ctx.api.dadosLote(l.id, { venda: true });
     const temReg = d.bios.length || d.mort.length || d.rac.length || d.desp.length;
     const fim = l.ativo || !temReg ? hoje : fimDoLote(l, d.bios, d.mort, d.rac, hoje, d.desp);
-    return { l, d, fim, c: calcularLote(l, d.bios, d.mort, d.rac, fim, precoKg, d.desp) };
+    return { l, d, fim, c: calcularLote(l, d.bios, d.mort, d.rac, fim, precoRacaoDoLote(compras, l.tipo), d.desp) }; // preço da ração que o lote come
   }));
   const { porLote, semRateio } = ratearDespesas(despesas, dados.map((x) => ({ id: x.l.id, ini: x.l.data_entrada, fim: x.fim, peso: pesoProduzido(x.c) })));
   const ciclos = dados.map((x) => {
@@ -47,11 +46,11 @@ export async function renderLucro(ctx, el) {
         ${x.fechado ? `<span class="valor-lucro ${f.lucro != null && f.lucro < 0 ? 'neg' : ''}">${din(f.lucro)}<small>${f.margem != null ? `${fmtNum(f.margem * 100, 1)}% de margem` : 'lucro'}</small></span>` : '<span class="tag">Em andamento</span>'}</header>
       <ul class="lista numeros">
         ${linha(x.fechado ? 'Receita' : 'Receita até agora', din(f.receita))}
-        ${linha('Ração', din(f.custoRacao), 'pelo preço médio pago por kg')}
+        ${linha('Ração', din(f.custoRacao), `pelo preço médio pago por kg da ração de ${['alevinagem', 'bercario'].includes(x.l.tipo) ? 'alevino' : 'engorda'}`)}
         ${linha('Alevinos', din(f.custoAlevino))}
         ${linha('Despesas gerais', din(f.despesas), 'divididas por peso produzido')}
         ${linha(x.fechado ? 'Custo total' : 'Custo até agora', din(f.custoTotal))}
-        ${f.custoKg != null ? linha('Custo por kg vendido', fmtBRL(f.custoKg), ant && ant.f.custoKg != null ? `ciclo anterior: ${fmtBRL(ant.f.custoKg)}` : '') : ''}
+        ${x.fechado && f.custoKg != null ? linha('Custo por kg vendido', fmtBRL(f.custoKg), ant && ant.f.custoKg != null ? `ciclo anterior: ${fmtBRL(ant.f.custoKg)}` : '') : ''}
       </ul>
       ${f.faltando.length && x.fechado ? `<p class="aviso">Conta incompleta. Falta: ${esc(f.faltando.join(', '))}.</p>` : ''}
       <div class="acoes-lucro no-print">

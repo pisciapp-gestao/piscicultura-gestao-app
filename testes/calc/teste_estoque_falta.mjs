@@ -1,9 +1,11 @@
 // Estoque que não cobre o lançamento de ração (13/11/2026): tipo de ração do lote e quanto falta,
 // descontando o que está na fila do celular sem enviar. 10 mil casos comparados com uma conta de referência.
 // Uso: node testes/calc/teste_estoque_falta.mjs
-import { tipoRacaoDoLote, faltaNoEstoque } from '../../js/calc.js';
+import { tipoRacaoDoLote, faltaNoEstoque, precoRacaoDoLote } from '../../js/calc.js';
 let ok = true; const checa = (c, m) => { console.log((c ? 'OK    ' : 'FALHA ') + m); ok = ok && c; };
-checa(tipoRacaoDoLote('alevinagem') === 'alevino' && ['bercario', 'recria', 'engorda', undefined, ''].every((t) => tipoRacaoDoLote(t) === 'engorda'), 'alevinagem usa ração de alevino; as outras fases, a de engorda (igual ao sql/17)');
+checa(['alevinagem', 'bercario'].every((t) => tipoRacaoDoLote(t) === 'alevino') && ['recria', 'engorda', undefined, ''].every((t) => tipoRacaoDoLote(t) === 'engorda'), 'berçário e alevinagem usam ração de alevino; recria e engorda, a de engorda (igual ao sql/18)');
+{ const cp = [{ tipo_racao: 'engorda', quantidade_kg: 1000, custo_total: 3000 }, { tipo_racao: 'alevino', quantidade_kg: 100, custo_total: 600 }];
+  checa(precoRacaoDoLote(cp, 'engorda') === 3 && precoRacaoDoLote(cp, 'bercario') === 6 && precoRacaoDoLote(cp.slice(0, 1), 'alevinagem') === 3, 'preço da ração do lote: pelo tipo que ele come (engorda R$ 3, alevino R$ 6); sem compra do tipo, a média geral'); }
 checa(faltaNoEstoque(1000, 0, 250) === 0, 'estoque de 1000 kg cobre 250 kg: não falta nada');
 checa(faltaNoEstoque(0, 0, 50) === 50, 'estoque zerado: faltam os 50 kg lançados');
 checa(faltaNoEstoque(-925, 0, 50) === 975, 'estoque já negativo (−925 kg): falta o que já faltava mais o lançamento');

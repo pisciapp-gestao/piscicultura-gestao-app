@@ -55,7 +55,7 @@ export function gerarPdfFazenda(jsPDF, d) {
   const porDia = sit.porDia || 0;
   const itens = [
     ['Em estoque', `${kg < 0 ? '-' : ''}${n(Math.abs(kg) / kgSaco, 0)}`, 'sacos', `${n(kg, 0)} kg`],
-    ['Dura cerca de', sit.dias != null ? fmtInt(Math.floor(sit.dias)) : '-', sit.dias != null ? 'dias' : '', d.ritmoHoje ? 'no ritmo de hoje' : 'no ritmo dos últimos 7 dias'],
+    ['Dura cerca de', sit.dias != null ? fmtInt(Math.floor(sit.dias)) : '-', sit.dias != null ? 'dias' : '', `${d.soEngorda ? 'engorda, ' : ''}${d.ritmoHoje ? 'no ritmo de hoje' : 'no ritmo dos últimos 7 dias'}`],
     ['Consumo médio', porDia > 0 ? n(porDia / kgSaco, 1) : '-', porDia > 0 ? 'sacos/dia' : '', porDia > 0 ? `${n(porDia, 0)} kg por dia` : 'sem consumo recente'],
     ['Comprado no total', n(Number(saldo.total_comprado_kg) / kgSaco, 0), 'sacos', `consumido: ${n(Number(saldo.total_consumido_kg) / kgSaco, 0)} sacos`],
   ];

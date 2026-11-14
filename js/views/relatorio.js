@@ -10,7 +10,7 @@ import { icone } from '../icons.js';
 import { esc, fmtData, fmtNum, fmtInt, fmtBRL, hojeISO, num, ROTULO_TIPO, faseCss, nomeArquivo, dataArquivo, progresso, fmtPct, numDecimal, numMoeda, moedaCampo, pesoMedioTxt, celulaCsv } from '../util.js';
 import { pizza, COR_FASE, ORDEM_FASE } from '../graficos.js';
 import { calcularNaIdade, fimDoLote, mediaDe, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui } from '../calc.js';
-import { calcularLote, precoMedioKg, pontosPeso, pesoMedioKg, evolucaoPeso, racaoPorSemana, matrizRacao, situacaoEstoque } from '../calc.js';
+import { calcularLote, precoMedioKg, precoRacaoDoLote, pontosPeso, pesoMedioKg, evolucaoPeso, racaoPorSemana, matrizRacao, situacaoEstoque } from '../calc.js';
 
 export function svgPeso(pts, { un = 'g', dec = 0, vazio = 'O gráfico aparece a partir da primeira biometria.', rotulo = 'Evolução do peso médio' } = {}) {
   if (pts.length < 2) return `<p class="mudo">${vazio}</p>`;
@@ -128,7 +128,7 @@ export async function renderRelatorios(ctx, el) {
       const ativos = lotes.filter((l) => l.ativo);
       const detalhes = await Promise.all(ativos.map(async (l) => {
         const { bios, mort, rac, desp } = await ctx.api.dadosLote(l.id, { venda: ctx.verDinheiro() });
-        return { nomeTanque: nomeDe(l.tanque_id), lote: l, c: calcularLote(l, bios, mort, rac, hoje, precoKg, desp) };
+        return { nomeTanque: nomeDe(l.tanque_id), lote: l, c: calcularLote(l, bios, mort, rac, hoje, ctx.verDinheiro() ? precoRacaoDoLote(compras, l.tipo) : null, desp) };
       }));
       detalhes.sort((a, b) => String(a.nomeTanque).localeCompare(String(b.nomeTanque), 'pt-BR', { numeric: true, sensitivity: 'base' }));
       const porDia = new Map(); const porTanque = new Map();
@@ -139,7 +139,7 @@ export async function renderRelatorios(ctx, el) {
         .sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR', { numeric: true, sensitivity: 'base' }));
       const doc = gerarPdfFazenda(jsPDF, {
         logo: ctx.state.ref.logo || null, fazenda: (ctx.state.perfil.fazendas && ctx.state.perfil.fazendas.nome) || 'Piscicultura', geradoEm: hoje, kgSaco: kgS, gerir, dinheiro: ctx.verDinheiro(), fontes, saldo: saldo || {},
-        sit: situacaoEstoque(engorda && engorda.saldo_kg, ritmoHoje ? hojeKgEng * 7 : engorda && engorda.consumo_7d_kg, ESTOQUE_ATENCAO_DIAS, ESTOQUE_CRITICO_DIAS), ritmoHoje,
+        sit: situacaoEstoque(engorda && engorda.saldo_kg, ritmoHoje ? hojeKgEng * 7 : engorda && engorda.consumo_7d_kg, ESTOQUE_ATENCAO_DIAS, ESTOQUE_CRITICO_DIAS), ritmoHoje, soEngorda: !!tiposR,
         lotes: detalhes, racaoDia, racaoTanque, precoKg, ultimaContagem: contagens[0] || null,
       });
       bf.disabled = false; bf.innerHTML = texto;
@@ -168,7 +168,9 @@ export async function renderRelatorioLote(ctx, el, id) {
   const hoje = hojeISO();
   const temReg = bios.length || mort.length || rac.length || desp.length;
   const fim = lote.ativo || !temReg ? hoje : fimDoLote(lote, bios, mort, rac, hoje, desp);
-  const c = calcularLote(lote, bios, mort, rac, fim, ctx.verDinheiro() ? precoMedioKg(compras) : null, desp);
+  // preço da ração que este lote come (alevino é mais cara que engorda)
+  const precoLote = (l) => (ctx.verDinheiro() ? precoRacaoDoLote(compras, l.tipo) : null);
+  const c = calcularLote(lote, bios, mort, rac, fim, precoLote(lote), desp);
   const nomeTanque = lote.tanques ? lote.tanques.nome : ((ctx.state.ref.tanques.find((t) => t.id === lote.tanque_id) || {}).nome || '');
 
   const unid = (v, u) => `${v}<em>${u}</em>`;
@@ -188,7 +190,6 @@ export async function renderRelatorioLote(ctx, el, id) {
   // ---- comparação com ciclos encerrados: na mesma idade deste lote e como terminaram ----
   let cmpHtml = '', cmpPdf = null;
   async function compararCiclos() {
-    const precoKg = ctx.verDinheiro() ? precoMedioKg(compras) : null;
     const todos = await ctx.api.lotes().catch(() => []);
     const enc = todos.filter((l) => !l.ativo && l.id !== lote.id && l.especie === lote.especie);
     const recentes = (a, b) => String(b.data_entrada).localeCompare(String(a.data_entrada));
@@ -200,7 +201,7 @@ export async function renderRelatorioLote(ctx, el, id) {
     const ids = [...new Set([anteriorTanque && anteriorTanque.id, ...mesmaFase.map((l) => l.id)].filter(Boolean))];
     const dados = Object.fromEntries(await Promise.all(ids.map(async (lid) => [lid, await ctx.api.dadosLote(lid, { venda: ctx.verDinheiro() }).catch(() => null)])));
     const idade = c.diasCultivo;
-    const naIdade = (l) => { const d = dados[l.id]; return d ? calcularNaIdade(l, d.bios, d.mort, d.rac, idade, precoKg, d.desp) : null; };
+    const naIdade = (l) => { const d = dados[l.id]; return d ? calcularNaIdade(l, d.bios, d.mort, d.rac, idade, precoLote(l), d.desp) : null; };
     const porMil = (x, l) => (x && Number(l.quantidade_inicial) > 0 ? (x.racaoTotal / Number(l.quantidade_inicial)) * 1000 : null);
     const ant = anteriorTanque ? naIdade(anteriorTanque) : null;
     const fase = mesmaFase.map((l) => ({ l, x: naIdade(l) })).filter((o) => o.x);
@@ -240,7 +241,7 @@ export async function renderRelatorioLote(ctx, el, id) {
     const dAnt = anteriorTanque && dados[anteriorTanque.id];
     if (dAnt) {
       const dataFim = fimDoLote(anteriorTanque, dAnt.bios, dAnt.mort, dAnt.rac, hoje, dAnt.desp);
-      const fz = calcularLote(anteriorTanque, dAnt.bios, dAnt.mort, dAnt.rac, dataFim, precoKg, dAnt.desp);
+      const fz = calcularLote(anteriorTanque, dAnt.bios, dAnt.mort, dAnt.rac, dataFim, precoLote(anteriorTanque), dAnt.desp);
       const dur = Math.max(0, Math.round((new Date(`${dataFim}T12:00:00`) - new Date(`${anteriorTanque.data_entrada}T12:00:00`)) / 864e5));
       cmpPdf.fim = `O ciclo anterior deste tanque durou ${fmtInt(dur)} dias e terminou com ${g(fz.pmAtualG)}${fz.ca != null ? `, conversão ${fmtNum(fz.ca, 2)}` : ''} e ${fmtPct(fz.sobrevivencia)}% de sobrevivência.`;
       fim = `<p class="cmp-fim">O ciclo anterior deste tanque durou <b>${fmtInt(dur)} dias</b> e terminou com <b>${g(fz.pmAtualG)}</b>${fz.ca != null ? `, conversão <b>${fmtNum(fz.ca, 2)}</b>` : ''} e <b>${fmtPct(fz.sobrevivencia)}%</b> de sobrevivência${gerir && fz.custoKgProduzido != null ? ` (ração a ${fmtBRL(fz.custoKgProduzido)} por kg produzido)` : ''}.</p>`;
@@ -346,6 +347,7 @@ export async function renderRelatorioLote(ctx, el, id) {
     <section class="bloco"><h2>Medições e mortes do dia</h2><div class="card tabela"><table><thead><tr><th>Data</th><th class="n">O₂</th><th class="n">°C</th><th class="n">pH</th><th class="n">NH₃</th><th class="n">Mortes</th></tr></thead><tbody>
       ${[...agua].reverse().slice(0, 30).map((a) => `<tr><td>${fmtData(a.data).slice(0, 5)}${a.hora ? ` <small>${esc(a.hora)}</small>` : ''}</td><td class="n">${n(a.oxigenio_mgl, 1)}</td><td class="n">${n(a.temperatura_c, 1)}</td><td class="n">${n(a.ph, 1)}</td><td class="n">${n(a.amonia_mgl, 2)}</td><td class="n">${mortesDia[a.data] ? fmtInt(mortesDia[a.data]) : '—'}</td></tr>`).join('')}
     </tbody></table></div>
+    ${agua.length > 30 ? `<p class="mudo nota">Mostrando as 30 medições mais recentes de ${fmtInt(agua.length)}. Todas vão na planilha (CSV).</p>` : ''}
     <p class="mudo nota">${tam ? 'Faixas do tambaqui: oxigênio de 4 a 8 mg/L, temperatura de 28 a 30 °C, pH de 5 a 7 e amônia tóxica abaixo de 0,46 mg/L (Embrapa, 2018). Confirme com o técnico da fazenda.' : `Ainda não há faixa de referência no app para ${esc(lote.especie)}. As medições aparecem sem alerta.`}</p></section>`;
   };
 
@@ -424,7 +426,7 @@ export async function renderRelatorioLote(ctx, el, id) {
       const r = rac.find((x) => x.id === rid); if (!r) return null;
       return {
         lista: [dataCampo(r.data), { nome: 'kg', rotulo: 'Ração (kg)', tipo: 'number', valor: r.quantidade_kg, step: '0.1', min: '0.1', inputmode: 'decimal', ajuda: `1 saco = ${fmtNum(kgS, 0)} kg` }],
-        validar: (v) => dataOk(v.data) || (num(v.kg) > 0 ? null : 'Informe a quantidade de ração em kg.'),
+        validar: (v) => dataOk(v.data) || (num(v.kg) > 0 ? null : 'Informe a quantidade de ração em kg.') || (num(v.kg) <= 5000 ? null : 'Quantidade muito alta para um tanque. Confira os kg.'),
         montar: (v) => ({ data: v.data, quantidade_kg: num(v.kg) }),
       };
     }
@@ -505,7 +507,7 @@ export async function renderRelatorioLote(ctx, el, id) {
       const [jsPDF, fontes] = await Promise.all([carregarGerador(), carregarFontes()]);
       const doc = gerarPdfLote(jsPDF, {
         logo: ctx.state.ref.logo || null, fazenda: (ctx.state.perfil.fazendas && ctx.state.perfil.fazendas.nome) || 'Piscicultura', lote, nomeTanque, c, bios, mort, rac,
-        evo: evolucaoPeso(lote, bios), semanas: racaoPorSemana(rac), kgSaco: kgS, gerir, dinheiro: ctx.verDinheiro(), geradoEm: hoje, fontes, cmp: cmpPdf,
+        evo: evolucaoPeso(lote, bios), semanas: racaoPorSemana(rac), agua, kgSaco: kgS, gerir, dinheiro: ctx.verDinheiro(), geradoEm: hoje, fontes, cmp: cmpPdf,
       });
       const blob = doc.output('blob');
       const nome = nomeArquivo(['Relatório do lote', nomeTanque || 'Tanque', lote.especie, `lote de ${dataArquivo(lote.data_entrada)}`, dataArquivo(hoje)], 'pdf');
@@ -574,7 +576,8 @@ export async function renderRacaoDia(ctx, el) {
   const fazenda = (ctx.state.perfil.fazendas && ctx.state.perfil.fazendas.nome) || 'Piscicultura';
   const hoje = hojeISO();
   const somaDias = (iso, n) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-  const [linhas, resumoLista] = await Promise.all([ctx.api.racaoPeriodo(somaDias(hoje, -59)), ctx.api.resumoLotes().catch(() => [])]);
+  let desde = somaDias(hoje, -59);
+  let [linhas, resumoLista] = await Promise.all([ctx.api.racaoPeriodo(desde), ctx.api.resumoLotes().catch(() => [])]);
   const resumo = Object.fromEntries((resumoLista || []).map((x) => [x.lote_id, x]));
   // lote e peso estimado dos peixes de cada tanque (para "% do peso vivo")
   const infoTanque = (tid) => {
@@ -716,7 +719,16 @@ export async function renderRacaoDia(ctx, el) {
     }
   }
   el.querySelectorAll('[data-per]').forEach((b) => b.addEventListener('click', () => { per = b.dataset.per; pintar(); }));
-  el.querySelector('#outro').addEventListener('change', (e) => { if (e.target.value) { outro = e.target.value > hoje ? hoje : e.target.value; per = 'dia'; pintar(); } });
+  el.querySelector('#outro').addEventListener('change', async (e) => {
+    if (!e.target.value) return;
+    outro = e.target.value > hoje ? hoje : e.target.value; per = 'dia';
+    // dia antes dos 60 já carregados (e o dia anterior, para comparar): busca de novo, senão mostrava zero
+    const precisa = somaDias(outro, -1);
+    if (precisa < desde) {
+      try { linhas = await ctx.api.racaoPeriodo(precisa); desde = precisa; } catch (x) { ctx.toast('Não foi possível buscar esse dia agora', 'erro'); }
+    }
+    pintar();
+  });
   const nomeRacao = (ext) => nomeArquivo(['Ração fornecida', fazenda, r.individual ? r.lista[0].nome : r.parcial ? `${r.lista.length} tanques` : '', r.um ? dataArquivo(r.fim) : `${dataArquivo(r.ini)} a ${dataArquivo(r.fim)}`], ext);
   pintar();
 
@@ -733,8 +745,9 @@ export async function renderRacaoDia(ctx, el) {
   });
   el.querySelector('#b-csv').addEventListener('click', () => {
     const L = [[`Ração fornecida (kg)${r.individual ? ' · ' + r.lista[0].nome : ''}`], [r.periodo], [], ['Dia', ...r.colunas, 'Total']];
-    r.linhasDia.forEach((d) => L.push([fmtData(d.data), ...r.lista.map((t) => (d.por[t.nome] == null ? '' : String(d.por[t.nome]).replace('.', ','))), String(d.kg).replace('.', ',')]));
-    L.push(['Total', ...r.lista.map((t) => String(t.kg).replace('.', ',')), String(r.total).replace('.', ',')]);
+    const c2 = (v) => csvNum(Math.round(Number(v) * 100) / 100).replace(/,00$/, ''); // 57,9 e não 57,900000000000006
+    r.linhasDia.forEach((d) => L.push([fmtData(d.data), ...r.lista.map((t) => (d.por[t.nome] == null ? '' : c2(d.por[t.nome]))), c2(d.kg)]));
+    L.push(['Total', ...r.lista.map((t) => c2(t.kg)), c2(r.total)]);
     baixarCsv(nomeRacao('csv'), '\ufeff' + L.map((l) => l.map(celulaCsv).join(';')).join('\r\n'));
   });
 }
