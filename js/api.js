@@ -344,8 +344,8 @@ export function criarApi(client) {
       const d = ok(await client.from(tabela).delete().eq('uuid_local', uuidLocal).select('id'));
       return (d || []).length;
     },
-    // o que a pessoa lançou hoje (desde a meia-noite), em todas as tabelas de lançamento; tabela que não existe (sql não rodado) vem vazia
-    async meusLancamentosHoje(userId, desdeISO) {
+    // o que a pessoa lançou desde uma hora (Meus lançamentos: 7 dias), em todas as tabelas de lançamento; tabela que não existe (sql não rodado) vem vazia
+    async meusLancamentos(userId, desdeISO) {
       const tabs = ['racao_consumo', 'mortalidade', 'biometrias', 'qualidade_agua', 'manejos', 'despescas'];
       const listas = await Promise.all(tabs.map(async (t) => {
         const { data, error } = await client.from(t).select('*').eq('registrado_por', userId).gte('criado_em', desdeISO).order('criado_em', { ascending: false }).limit(300);
@@ -353,6 +353,23 @@ export function criarApi(client) {
         return (data || []).map((r) => ({ tabela: t, payload: r }));
       }));
       return listas.flat();
+    },
+    // ----- pedidos de correção (sql/35) -----
+    // null = sql/35 ainda não rodado
+    async pedidosCorrecao({ desdeISO, meus } = {}) {
+      let q = client.from('pedidos_correcao').select('*').order('pedido_em', { ascending: false }).limit(300);
+      if (desdeISO) q = q.gte('pedido_em', desdeISO);
+      if (meus) q = q.eq('pedido_por', meus);
+      const { data, error } = await q;
+      if (error) { if (ehErroDeRede(error)) throw new ErroApi(error); return null; }
+      return data || [];
+    },
+    async pedirCorrecao(tabela, registroId, acao, campos, motivo) {
+      return ok(await client.rpc('pedir_correcao', { p_tabela: tabela, p_registro: registroId, p_acao: acao, p_campos: campos, p_motivo: motivo }));
+    },
+    async cancelarPedidoCorrecao(id) { ok(await client.rpc('cancelar_pedido_correcao', { p_id: id })); },
+    async responderCorrecao(id, aprovar, resposta) {
+      return ok(await client.rpc('responder_correcao', { p_id: id, p_aprovar: aprovar, p_resposta: resposta || null }));
     },
     async excluir(tabela, id) {
       if (!TABELAS_EXCLUIVEIS.has(tabela)) throw new Error('Tabela não permitida');

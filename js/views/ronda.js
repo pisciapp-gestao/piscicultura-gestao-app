@@ -58,7 +58,7 @@ export async function renderRonda(ctx, el, { inicio = false } = {}) {
     ${linhas.length ? `<a class="card ronda-galpao" href="#/estoque"><span class="item-ic">${icone('estoque')}</span><span class="esq"><b>Galpão: ${esc(F.nSacos(F.sacos(galpaoKg)))} de ração</b><small>chegou ração ou quer contar? toque aqui</small></span><span class="seta">${icone('direita', 20)}</span></a>` : ''}
     <div class="card ronda-protocolo"><b>Errou algum número?</b>
       ${gerir ? '<p>Abra o tanque e toque em <b>Relatório do lote</b>: em <b>Lançamentos</b> dá para corrigir ou excluir.</p>'
-        : '<p>Logo depois de salvar aparece <b>Desfazer</b>: vale por 5 minutos. Depois, até o fim do dia, corrija em <b>Meus lançamentos</b>. No dia seguinte, só o dono ou o gerente corrige.</p><p>Não lance de novo para compensar: soma em dobro.</p>'}
+        : '<p>Logo depois de salvar aparece <b>Desfazer</b>: vale por 5 minutos. Depois, até o fim do dia, corrija em <b>Meus lançamentos</b>. Dias anteriores: lá mesmo, <b>Pedir correção</b> (o dono ou o gerente aprova).</p><p>Não lance de novo para compensar: soma em dobro.</p>'}
       <a class="btn mini ronda-meus" href="#/meus">Meus lançamentos</a></div>`;
 
   const lista = el.querySelector('#ronda-lista');
