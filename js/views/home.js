@@ -9,6 +9,7 @@ import { metaDe, htmlPrevisao } from './despesca.js';
 import { pintarTempo } from './tempo.js';
 import { dadosDoDia, situacaoTanque, formatosSaco, ordemNatural, statusTanque } from './dia.js';
 import { renderRonda } from './ronda.js';
+import { avisoPedidos } from './pedidos.js';
 export { renderTanqueDetalhe } from './tanque-detalhe.js';
 export { ordemNatural, statusTanque };
 
@@ -104,6 +105,7 @@ export async function renderHome(ctx, el) {
       </div>
     </div>`;
   avisoPlano(ctx, el.querySelector('#avisos'));
+  avisoPedidos(ctx, el.querySelector('#avisos'));
   avisoConviteUsado(ctx, el.querySelector('#avisos'));
   pintarTempo(el.querySelector('#b-tempo'), ctx, hoje);
 
