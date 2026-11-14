@@ -78,9 +78,11 @@ export async function renderPedidos(ctx, el) {
 }
 
 // aviso na Hoje do dono e do gerente: quantos pedidos esperam resposta
+// (aviso opcional: se a busca falhar, a Hoje abre normal, sem ele)
 export async function avisoPedidos(ctx, caixa) {
   if (!ctx.podeGerir() || !navigator.onLine || !caixa) return;
-  const lista = await ctx.api.pedidosCorrecao({ desdeISO: new Date(Date.now() - 30 * 86400000).toISOString() }).catch(() => null);
+  let lista = null;
+  try { lista = await ctx.api.pedidosCorrecao({ desdeISO: new Date(Date.now() - 30 * 86400000).toISOString() }); } catch { return; }
   const n = (lista || []).filter((p) => p.status === 'pendente').length;
   if (!n) return;
   caixa = caixa.isConnected ? caixa : document.getElementById('avisos');

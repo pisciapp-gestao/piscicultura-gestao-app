@@ -62,6 +62,8 @@ async ({ N }) => {
         resumoLotes: async () => f.resumo, saldosRacao: async () => { if (!f.saldos) throw new Error('rpc'); return f.saldos; },
         racaoPeriodo: async () => f.racao, mortalidadePeriodo: async () => f.mortes, aguaPeriodo: async () => [], plano: async () => ({ estado: um(['ativo', 'teste', 'vencido']), valido_ate: iso(-5), em_uso: 1, limite: 5 }),
         criarTanque: async () => {},
+        // pedidos de correção (sql/35): sem o sql (null), nenhum, alguns abertos, ou erro do servidor
+        pedidosCorrecao: async () => { const v = um(['null', 'vazio', 'alguns', 'erro']); if (v === 'erro') throw new Error('rpc'); return v === 'null' ? null : v === 'vazio' ? [] : Array.from({ length: int(1, 4) }, (_, k) => ({ id: 'P' + k, status: um(['pendente', 'aprovado']), tabela: 'racao_consumo', acao: 'corrigir', antes: {}, campos: {} })); },
       },
       podeGerir: () => papel !== 'funcionario', toast: () => {}, atualizarRef: async () => true,
     };
