@@ -1346,3 +1346,24 @@ a.acao:active, .rl-tq:active { transform: scale(.98); }
 .meu-acoes .btn { gap: .35rem; }
 .ronda-protocolo ol { margin: .35rem 0 0; padding-left: 1.2rem; color: var(--tinta-2); font-size: .92rem; display: grid; gap: .25rem; }
 .ronda-meus { margin-top: .6rem; }
+
+/* ---------- etapa 3 (14/11/2026): pedir correção ---------- */
+.meus-dia { font-size: 1rem; margin: 1rem 0 .4rem; color: var(--tinta-2); }
+.meu-resp { color: var(--erro-tinta); }
+.meu-cab .sits { flex: none; }
+.aviso-pedidos { display: flex; align-items: center; gap: .7rem; text-decoration: none; color: inherit; border-color: var(--alerta-borda); background: var(--alerta-bg); }
+.aviso-pedidos .esq { flex: 1; min-width: 0; display: grid; gap: .1rem; }
+.aviso-pedidos small { color: var(--tinta-2); }
+.pedidos-lista { display: grid; gap: .7rem; margin-bottom: .8rem; }
+@media (min-width: 900px) { .pedidos-lista { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pedido-cab { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+.pedido-cab small { color: var(--tinta-2); }
+.pedido-val { margin: .5rem 0 .7rem; display: grid; gap: .1rem; }
+.pedido-val div { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem 0; border-top: 1px solid var(--linha); }
+.pedido-val dt { color: var(--tinta-2); flex: none; }
+.pedido-val dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.pedido-val .riscado { text-decoration: line-through; color: var(--tinta-2); font-weight: 500; }
+.pedido-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.pedidos-resp li { display: flex; align-items: flex-start; gap: .6rem; }
+.pedidos-resp .esq { flex: 1; min-width: 0; display: grid; gap: .1rem; }
+.pedidos-resp .sit { flex: none; }

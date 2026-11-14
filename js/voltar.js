@@ -5,12 +5,12 @@ import { icone } from './icons.js';
 import { esc } from './util.js';
 
 const PADRAO = {
-  t: ['#/tanques', 'Tanques'], tanque: ['#/tanques', 'Tanques'], ronda: ['#/', 'Hoje'], lancar: ['#/', 'Hoje'], meus: ['#/', 'Hoje'], estoque: ['#/mais', 'Fazenda'],
+  t: ['#/tanques', 'Tanques'], tanque: ['#/tanques', 'Tanques'], ronda: ['#/', 'Hoje'], lancar: ['#/', 'Hoje'], meus: ['#/', 'Hoje'], pedidos: ['#/', 'Hoje'], estoque: ['#/mais', 'Fazenda'],
   equipe: ['#/mais', 'Fazenda'], plano: ['#/mais', 'Fazenda'], historico: ['#/mais', 'Fazenda'], pendencias: ['#/mais', 'Fazenda'],
   admin: ['#/mais', 'Fazenda'], relatorio: ['#/relatorio', 'Relatórios'], lucro: ['#/relatorio', 'Relatórios'], despesas: ['#/lucro', 'Lucro por ciclo'],
 };
 const NOME = {
-  '': 'Hoje', ronda: 'Ronda', lancar: 'Lançar', meus: 'Meus lançamentos', mais: 'Fazenda', fazenda: 'Fazenda', tanques: 'Tanques', tanque: 'Tanque', t: 'Tanque', estoque: 'Estoque',
+  '': 'Hoje', ronda: 'Ronda', lancar: 'Lançar', meus: 'Meus lançamentos', pedidos: 'Pedidos de correção', mais: 'Fazenda', fazenda: 'Fazenda', tanques: 'Tanques', tanque: 'Tanque', t: 'Tanque', estoque: 'Estoque',
   equipe: 'Equipe', plano: 'Meu plano', historico: 'Histórico', pendencias: 'Pendentes', admin: 'Administração', lucro: 'Lucro por ciclo', despesas: 'Despesas gerais',
 };
 const partesDe = (hash) => String(hash || '#/').replace(/^#\/?/, '').split('?')[0].split('/');

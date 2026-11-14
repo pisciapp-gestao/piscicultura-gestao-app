@@ -16,7 +16,8 @@ export function renderMais(ctx, el) {
     ['No dia a dia', [
       ['#/estoque', 'estoque', 'Estoque de ração', gerir ? 'Saldo, compras e contagem' : 'Saldo de ração'],
       gerir && ['#/despesas', 'estoque', 'Despesas gerais', 'Energia, mão de obra e outros custos'],
-      ['#/meus', 'lancar', 'Meus lançamentos', 'O que você lançou hoje: desfazer ou corrigir'],
+      ['#/meus', 'lancar', 'Meus lançamentos', 'Últimos 7 dias: desfazer, corrigir ou pedir correção'],
+      gerir && ['#/pedidos', 'historico', 'Pedidos de correção', 'Aprovar ou recusar o que a equipe pediu para corrigir'],
       ['#/pendencias', 'pendentes', 'Pendentes de envio', state.pendentes ? `${state.pendentes} aguardando envio` : 'Nada pendente'],
     ]],
     ['Pessoas', [dono && ['#/equipe', 'equipe', 'Equipe', 'Pessoas, papéis e tanques liberados']]],
