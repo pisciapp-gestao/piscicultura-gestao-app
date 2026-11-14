@@ -1367,3 +1367,10 @@ a.acao:active, .rl-tq:active { transform: scale(.98); }
 .pedidos-resp li { display: flex; align-items: flex-start; gap: .6rem; }
 .pedidos-resp .esq { flex: 1; min-width: 0; display: grid; gap: .1rem; }
 .pedidos-resp .sit { flex: none; }
+
+/* povoamentos do lote (1º + outras datas), dentro da dobra do lote */
+.povoamentos { margin-top: .6rem; padding-top: .5rem; border-top: 1px solid var(--linha, #e3e9e5); }
+.povoamentos .pov-tit { margin: 0 0 .2rem; font-size: .8rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--mudo, #5b6b64); }
+.pov-lista li { gap: .5rem; }
+.pov-bts { display: inline-flex; gap: .4rem; flex-shrink: 0; }
+.povoamentos > .btn { margin-top: .5rem; }

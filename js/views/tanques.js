@@ -11,6 +11,12 @@ import { ordemNatural } from './home.js';
 
 // 2,3 kg / 500 g; 5,5 ha
 const pmTxt = (kg) => (kg >= 1 ? `${fmtNum(kg, kg % 1 ? 2 : 0)} kg` : `${fmtNum(kg * 1000, 0)} g`);
+// tamanho do alevino (cm) -> peso aproximado (g). Peso = a x comprimento^3 (relação peso-comprimento de peixes jovens).
+// Tambaqui e redondos: a = 0,025 (5 cm = 3 g); tilápia é mais fina: a = 0,017 (5 cm = 2 g). É estimativa: pese quando puder.
+export const gramasPorCm = (cm, especie = '') => { const c = Number(cm); if (!(c > 0)) return null; const a = /til[aá]pia/i.test(especie) ? 0.017 : 0.025; return Math.round(a * c * c * c * 10) / 10; };
+const UNIDADES_PESO = [['g', 'gramas'], ['kg', 'kg'], ['cm', 'tamanho em cm (estimar o peso)']];
+// valor + unidade do formulário -> kg por peixe
+const pesoKgDe = (valor, un, especie) => { const v = num(valor); if (!(v > 0)) return null; if (un === 'cm') { const g = gramasPorCm(v, especie); return g ? g / 1000 : null; } return un === 'g' ? v / 1000 : v; };
 const haTxt = (ha) => `${fmtNum(ha, Number(ha) % 1 ? 2 : 0).replace(/(,\d)0$/, '$1')} ha`;
 // Nome com limite de letras: o campo para de aceitar no limite. Mostra quantas faltam perto do fim,
 // para a pessoa não achar que o nome foi cortado sem motivo.
@@ -63,7 +69,7 @@ export async function renderTanques(ctx, el) {
     <details class="card form-dobra" id="d-planilha">
       <summary>Cadastrar vários tanques de uma vez (colar planilha)</summary>
       <div class="form">
-        <p class="mudo" style="margin-top:0">Copie as linhas do Excel (ou escreva uma por linha) nesta ordem: <b>Tanque · Área (ha) · Fase · Peixes · Peso médio · Início do ciclo</b>. Pode separar por tabulação ou ponto e vírgula. Peso em kg ou com "g" (ex.: 500 g). Tanque sem peixes entra só como tanque.</p>
+        <p class="mudo" style="margin-top:0">Copie as linhas do Excel (ou escreva uma por linha) nesta ordem: <b>Tanque · Área (ha) · Fase · Peixes · Peso médio · Data de povoamento</b>. Pode separar por tabulação ou ponto e vírgula. Peso em kg ou com "g" (ex.: 500 g). Tanque sem peixes entra só como tanque.</p>
         <textarea id="planilha" rows="7" aria-label="Linhas da planilha ou mensagem do WhatsApp com os tanques" placeholder="Tanque 1;5,5;Engorda;12000;2,3;10/06/2026&#10;Tanque 6;8,5;Recria;98000;500 g;15/08/2026&#10;Tanque 8;2,3"></textarea>
         <div id="previa"></div>
         <p id="erro-pl" class="erro" hidden></p>
@@ -86,9 +92,10 @@ export async function renderTanques(ctx, el) {
     if (tanques.some((t) => t.nome.toLowerCase() === nome.toLowerCase())) { erro.textContent = 'Já existe um tanque com esse nome.'; erro.hidden = false; return; }
     const btn = f.querySelector('button'); btn.disabled = true;
     try {
-      await ctx.api.criarTanque(ctx.state.perfil.fazenda_id, nome, area);
+      const novoId = await ctx.api.criarTanque(ctx.state.perfil.fazenda_id, nome, area);
       await ctx.atualizarRef();
-      ctx.toast('Tanque cadastrado', 'ok');
+      ctx.toast('Tanque cadastrado. Agora informe o povoamento.', 'ok');
+      if (novoId) { location.hash = `#/tanque/${novoId}`; return; } // tanque novo abre já no formulário de povoamento
       renderTanques(ctx, el);
     } catch (e) {
       erro.textContent = e.message; erro.hidden = false; btn.disabled = false;
@@ -147,6 +154,10 @@ export async function renderTanque(ctx, el, id, params = {}) {
   el.innerHTML = `<h1>${esc(tanque.nome)}</h1><p class="carregando">Carregando…</p>`;
   const [lotesTodos, resumoRows] = await Promise.all([ctx.api.lotes(), ctx.api.resumoLotes().catch(() => [])]);
   const todos = lotesTodos.filter((l) => l.tanque_id === id);
+  const povs = await ctx.api.povoamentos(todos.map((l) => l.id)).catch(() => []);
+  const extrasDe = (lid) => povs.filter((p) => p.lote_id === lid);
+  // 1º povoamento = total do lote menos os povoamentos extras (o banco soma os extras no lote)
+  const primeiro = (l) => { const ex = extrasDe(l.id); const q = Number(l.quantidade_inicial) - ex.reduce((a, p) => a + Number(p.quantidade), 0); const kg = Number(l.peso_inicial_kg) - ex.reduce((a, p) => a + Number(p.peso_total_kg), 0); return { q, kg, pm: q > 0 ? kg / q : 0 }; };
   const ativos = todos.filter((l) => l.ativo);
   // peixe na água agora (mesma estimativa da tela Início: vivos × último peso médio)
   const resumo = Object.fromEntries((resumoRows || []).map((r) => [r.lote_id, r]));
@@ -180,10 +191,20 @@ export async function renderTanque(ctx, el, id, params = {}) {
     <h2>Lotes</h2>
     <div class="card">
       ${todos.length ? `<ul class="lista">${todos.map((l) => `
-        <li class="item-dobra"><details class="lote-dobra" data-lote="${esc(l.id)}">
+        <li class="item-dobra"><details class="lote-dobra" data-lote="${esc(l.id)}"${params.aberto === l.id ? ' open' : ''}>
           <summary><span class="esq"><b>${esc(ROTULO_TIPO[l.tipo] || l.tipo)} · ${esc(l.especie)}</b>
-            <small>desde ${fmtData(l.data_entrada)} · ${fmtInt(l.quantidade_inicial)} peixes · ${pmTxt(Number(l.peso_inicial_kg) / Math.max(1, Number(l.quantidade_inicial)))} cada na entrada (${fmtNum(l.peso_inicial_kg, 0)} kg)</small></span>
+            <small>${extrasDe(l.id).length ? `povoado em ${extrasDe(l.id).length + 1} datas, de ${fmtData(l.data_entrada)} a ${fmtData(extrasDe(l.id).slice(-1)[0].data)}` : `povoado em ${fmtData(l.data_entrada)}`} · ${fmtInt(l.quantidade_inicial)} peixes · ${pmTxt(Number(l.peso_inicial_kg) / Math.max(1, Number(l.quantidade_inicial)))} cada na entrada (${fmtNum(l.peso_inicial_kg, 0)} kg)</small></span>
             <span class="tag ${l.ativo ? 'ok' : ''}">${l.ativo ? 'Ativo' : 'Encerrado'}</span></summary>
+          <div class="povoamentos">
+            <p class="pov-tit">Povoamentos</p>
+            <ul class="lista pov-lista">
+              <li><div class="esq"><b>${fmtData(l.data_entrada)} · ${fmtInt(primeiro(l).q)} peixes</b><small>1º povoamento · ${pmTxt(primeiro(l).pm)} cada (${fmtNum(primeiro(l).kg, primeiro(l).kg < 100 ? 1 : 0)} kg)</small></div>
+                <button class="btn mini" data-editar-lote="${esc(l.id)}" type="button">Corrigir</button></li>
+              ${extrasDe(l.id).map((p) => `<li><div class="esq"><b>${fmtData(p.data)} · +${fmtInt(p.quantidade)} peixes</b><small>${pmTxt(Number(p.peso_total_kg) / Math.max(1, Number(p.quantidade)))} cada (${fmtNum(p.peso_total_kg, Number(p.peso_total_kg) < 100 ? 1 : 0)} kg)</small></div>
+                <span class="pov-bts"><button class="btn mini" data-editar-pov="${esc(p.id)}" type="button">Corrigir</button><button class="btn mini perigo" data-excluir-pov="${esc(p.id)}" type="button">Excluir</button></span></li>`).join('')}
+            </ul>
+            ${l.ativo ? `<button class="btn mini primario" data-add-pov="${esc(l.id)}" type="button">+ Adicionar peixes (povoamento em outra data)</button>` : ''}
+          </div>
           <div class="acoes">
             <a class="btn mini" href="#/relatorio/${esc(l.id)}">Relatório</a>
             <button class="btn mini" data-editar-lote="${esc(l.id)}" type="button">Editar</button>
@@ -204,18 +225,20 @@ export async function renderTanque(ctx, el, id, params = {}) {
       </div>
       <label id="especie-outra-wrap" hidden>Qual espécie? <input id="especie-outra" maxlength="60" placeholder="Digite o nome do peixe"></label>
       <label class="linha-check"><input type="checkbox" id="andamento"> Os peixes já estão no tanque (lote em andamento)</label>
-      <label><span id="rot-data">Data de entrada no tanque</span> <input id="data" type="date" value="${hoje}" max="${hoje}" required></label>
+      <label><span id="rot-data">Data de povoamento</span> <input id="data" type="date" value="${hoje}" max="${hoje}" required></label>
+      <p class="mudo pequeno" style="margin-top:-.3rem">O dia em que os peixes entraram no tanque, mesmo que tenha sido antes de usar o app. Entrou peixe em outro dia? Cadastre o primeiro e depois toque em "+ Adicionar peixes" no lote.</p>
       <label>Quantidade de peixes <input id="qtd" type="number" inputmode="numeric" step="1" min="1" required></label>
       <div class="duas">
         <label><span id="rot-pm">Peso médio de cada peixe</span> <input id="pm-in" type="text" inputmode="decimal" placeholder="Ex.: 2,3" required></label>
-        <label>Unidade <select id="pm-un"><option value="kg">kg</option><option value="g">gramas</option></select></label>
+        <label>Unidade <select id="pm-un"><option value="kg">kg</option><option value="g">gramas</option><option value="cm">tamanho em cm</option></select></label>
       </div>
+      <p class="calc" id="cm-est" hidden></p>
       <div class="duas" id="hoje-wrap" hidden>
         <label>Peso médio de hoje <input id="pmh-in" type="text" inputmode="decimal" placeholder="Ex.: 2,3"></label>
         <label>Unidade <select id="pmh-un"><option value="kg">kg</option><option value="g">gramas</option></select></label>
       </div>
       <p class="mudo pequeno" id="ajuda-andamento" hidden>O peso de hoje vira a primeira pesagem (biometria) do lote, para a curva de crescimento começar certa. Se não souber o peso na entrada, use uma estimativa.</p>
-      <div class="calc" id="pm">Peso total do lote: —</div>
+      <div class="calc" id="pm">Peso total do povoamento: —</div>
       <p id="erro" class="erro" hidden></p>
       <button class="btn primario" type="submit">Cadastrar lote</button>
     </form>
@@ -250,10 +273,14 @@ export async function renderTanque(ctx, el, id, params = {}) {
   if (doInicio) {
     requestAnimationFrame(() => el.querySelector('#d-lote').scrollIntoView({ block: 'start', behavior: 'smooth' }));
   }
-  const pmKg = (inp, un) => { const v = num(f.querySelector(inp).value); return v > 0 ? (f.querySelector(un).value === 'g' ? v / 1000 : v) : null; };
+  const especieForm = () => (f.querySelector('#especie').value === '__outra' ? f.querySelector('#especie-outra').value : f.querySelector('#especie').value);
+  const pmKg = (inp, un) => pesoKgDe(f.querySelector(inp).value, f.querySelector(un).value, especieForm());
   const atualizaPm = () => {
     const q = num(f.querySelector('#qtd').value), pm = pmKg('#pm-in', '#pm-un');
-    f.querySelector('#pm').textContent = q > 0 && pm ? `Peso total do lote: ${fmtNum(q * pm, q * pm < 100 ? 1 : 0)} kg (${fmtInt(q)} × ${pmTxt(pm)})` : 'Peso total do lote: —';
+    const cm = f.querySelector('#pm-un').value === 'cm', est = f.querySelector('#cm-est');
+    est.hidden = !cm;
+    if (cm) est.textContent = pm ? `${fmtNum(num(f.querySelector('#pm-in').value), 1)} cm ≈ ${fmtNum(pm * 1000, 1)} g por peixe (estimativa para ${especieForm() || 'peixe'}). Pese uma amostra quando puder.` : 'Digite o tamanho do peixe em cm (ex.: 5). O app estima o peso: 5 cm ≈ 3 g no tambaqui.';
+    f.querySelector('#pm').textContent = q > 0 && pm ? `Peso total do povoamento: ${fmtNum(q * pm, q * pm < 100 ? 1 : 0)} kg (${fmtInt(q)} × ${pmTxt(pm)})` : 'Peso total do povoamento: —';
   };
   // alevino e berçário se pesam em gramas no campo; recria e engorda em kg (recria chega a 1,5 kg). A unidade acompanha a fase
   // escolhida (a pessoa ainda pode trocar). Só muda o que ela não mexeu.
@@ -275,7 +302,7 @@ export async function renderTanque(ctx, el, id, params = {}) {
   andamento.addEventListener('change', () => {
     const on = andamento.checked;
     f.querySelector('#hoje-wrap').hidden = !on; f.querySelector('#ajuda-andamento').hidden = !on;
-    f.querySelector('#rot-data').textContent = on ? 'Início do ciclo' : 'Data de entrada no tanque';
+    f.querySelector('#rot-data').textContent = 'Data de povoamento';
     f.querySelector('#rot-pm').textContent = on ? 'Peso médio na entrada' : 'Peso médio de cada peixe';
   });
 
@@ -290,7 +317,7 @@ export async function renderTanque(ctx, el, id, params = {}) {
     const peso = qtd > 0 && pm ? Math.round(qtd * pm * 100) / 100 : 0;
     const falha = (m) => { erro.textContent = m; erro.hidden = false; };
     if (!especie) return falha('Informe a espécie.');
-    if (!f.querySelector('#data').value) return falha('Informe a data de entrada.');
+    if (!f.querySelector('#data').value) return falha('Informe a data de povoamento.');
     if (!(qtd >= 1) || !Number.isInteger(qtd)) return falha('Informe a quantidade de peixes (número inteiro).');
     if (!pm) return falha('Informe o peso médio de cada peixe.');
     if (pm > 30) return falha('Peso médio acima de 30 kg por peixe. Confira se não digitou o peso total ou se a unidade é gramas.');
@@ -323,26 +350,83 @@ export async function renderTanque(ctx, el, id, params = {}) {
     b.addEventListener('click', async () => {
       if (!navigator.onLine) return ctx.toast('Sem internet', 'erro');
       const l = todos.find((x) => x.id === b.dataset.editarLote); if (!l) return;
+      const ex = extrasDe(l.id), p1 = primeiro(l), exQ = ex.reduce((a, p) => a + Number(p.quantidade), 0), exKg = ex.reduce((a, p) => a + Number(p.peso_total_kg), 0);
       const v = await formulario({
-        titulo: 'Corrigir dados do lote', texto: 'Os relatórios do lote serão recalculados com os dados novos.',
+        titulo: ex.length ? 'Corrigir lote e 1º povoamento' : 'Corrigir dados do lote', texto: `Os relatórios do lote serão recalculados com os dados novos.${ex.length ? ` Os outros ${plural(ex.length, 'povoamento', 'povoamentos')} (${fmtInt(exQ)} peixes) continuam somados.` : ''}`,
         campos: [
           { nome: 'tipo', rotulo: 'Fase', tipo: 'select', valor: l.tipo, opcoes: FASES },
           { nome: 'especie', rotulo: 'Espécie', tipo: 'text', valor: l.especie, maxlength: '60' },
-          { nome: 'data', rotulo: 'Data de entrada no tanque', tipo: 'date', valor: l.data_entrada, max: hoje },
-          { nome: 'qtd', rotulo: 'Quantidade de peixes', tipo: 'number', valor: l.quantidade_inicial, step: '1', min: '1', inputmode: 'numeric' },
-          { nome: 'pm', rotulo: 'Peso médio de cada peixe na entrada (kg)', tipo: 'text', valor: String(Math.round(Number(l.peso_inicial_kg) / Math.max(1, Number(l.quantidade_inicial)) * 1000) / 1000).replace('.', ','), inputmode: 'decimal', ajuda: 'Em kg: 500 gramas = 0,5. O app calcula o peso total do lote.' },
+          { nome: 'data', rotulo: ex.length ? 'Data do 1º povoamento' : 'Data de povoamento', tipo: 'date', valor: l.data_entrada, max: ex.length ? ex[0].data : hoje },
+          { nome: 'qtd', rotulo: ex.length ? 'Peixes no 1º povoamento' : 'Quantidade de peixes', tipo: 'number', valor: p1.q, step: '1', min: '1', inputmode: 'numeric' },
+          { nome: 'pm', rotulo: 'Peso médio de cada peixe na entrada', tipo: 'text', valor: String(p1.pm < 1 ? Math.round(p1.pm * 10000) / 10 : Math.round(p1.pm * 1000) / 1000).replace('.', ','), inputmode: 'decimal' },
+          { nome: 'un', rotulo: 'Unidade do peso', tipo: 'select', valor: p1.pm < 1 ? 'g' : 'kg', opcoes: UNIDADES_PESO },
         ],
-        validar: (x) => (!x.especie.trim() ? 'Informe a espécie.' : !x.data ? 'Informe a data de entrada.' : x.data > hoje ? 'A data não pode ser no futuro.'
-          : !(Number.isInteger(num(x.qtd)) && num(x.qtd) >= 1) ? 'Informe a quantidade de peixes (número inteiro).' : !(num(x.pm) > 0) ? 'Informe o peso médio de cada peixe em kg.' : num(x.pm) > 30 ? 'Peso médio acima de 30 kg: confira (é por peixe, em kg).' : null),
+        validar: (x) => { const pm = pesoKgDe(x.pm, x.un, x.especie); return !x.especie.trim() ? 'Informe a espécie.' : !x.data ? 'Informe a data de povoamento.' : x.data > hoje ? 'A data não pode ser no futuro.'
+          : ex.length && x.data > ex[0].data ? `A data do 1º povoamento não pode ser depois de ${fmtData(ex[0].data)} (outro povoamento do lote).`
+          : !(Number.isInteger(num(x.qtd)) && num(x.qtd) >= 1) ? 'Informe a quantidade de peixes (número inteiro).' : !pm ? 'Informe o peso médio de cada peixe.' : pm > 30 ? 'Peso médio acima de 30 kg: confira a unidade (é por peixe).' : null; },
       });
       if (!v) return;
       try {
-        await ctx.api.atualizar('lotes', l.id, { tipo: v.tipo, especie: v.especie.trim(), data_entrada: v.data, quantidade_inicial: num(v.qtd), peso_inicial_kg: Math.round(num(v.qtd) * num(v.pm) * 100) / 100 });
+        const pm = pesoKgDe(v.pm, v.un, v.especie);
+        await ctx.api.atualizar('lotes', l.id, { tipo: v.tipo, especie: v.especie.trim(), data_entrada: v.data, quantidade_inicial: num(v.qtd) + exQ, peso_inicial_kg: Math.round((num(v.qtd) * pm + exKg) * 100) / 100 });
         await ctx.atualizarRef();
         ctx.toast('Lote corrigido', 'ok');
-        renderTanque(ctx, el, id);
+        renderTanque(ctx, el, id, { aberto: l.id });
       } catch (e) { ctx.toast(e.message, 'erro'); }
     }));
+
+  // ---- povoamento em outra data (sql/36): soma peixes no mesmo lote ----
+  const formPov = async (l, p) => {
+    const pmIni = p ? Number(p.peso_total_kg) / Math.max(1, Number(p.quantidade)) : null;
+    const g = p ? pmIni < 1 : ['alevinagem', 'bercario'].includes(l.tipo);
+    return formulario({
+      titulo: p ? 'Corrigir povoamento' : `Adicionar peixes · ${ROTULO_TIPO[l.tipo] || l.tipo}`,
+      texto: p ? 'O total de peixes do lote é recalculado.' : `Peixes que entraram neste lote em outra data. Eles somam aos ${fmtInt(l.quantidade_inicial)} que já estão no lote (povoado em ${fmtData(l.data_entrada)}).`,
+      campos: [
+        { nome: 'data', rotulo: 'Data deste povoamento', tipo: 'date', valor: p ? p.data : hoje, min: l.data_entrada, max: hoje },
+        { nome: 'qtd', rotulo: 'Quantos peixes entraram', tipo: 'number', valor: p ? p.quantidade : '', step: '1', min: '1', inputmode: 'numeric' },
+        { nome: 'pm', rotulo: 'Peso médio (ou tamanho) de cada peixe', tipo: 'text', valor: p ? String(g ? Math.round(pmIni * 10000) / 10 : Math.round(pmIni * 1000) / 1000).replace('.', ',') : '', inputmode: 'decimal', ajuda: `Comprou por tamanho? Escolha "cm" na unidade: 5 cm ≈ ${fmtNum(gramasPorCm(5, l.especie), 1)} g (estimativa para ${l.especie}).` },
+        { nome: 'un', rotulo: 'Unidade', tipo: 'select', valor: g ? 'g' : 'kg', opcoes: UNIDADES_PESO },
+      ],
+      validar: (x) => { const pm = pesoKgDe(x.pm, x.un, l.especie); return !x.data ? 'Informe a data do povoamento.' : x.data > hoje ? 'A data não pode ser no futuro.' : x.data < l.data_entrada ? `A data não pode ser antes do 1º povoamento (${fmtData(l.data_entrada)}).`
+        : !(Number.isInteger(num(x.qtd)) && num(x.qtd) >= 1) ? 'Informe quantos peixes entraram (número inteiro).' : !pm ? 'Informe o peso médio ou o tamanho de cada peixe.' : pm > 30 ? 'Peso médio acima de 30 kg: confira a unidade (é por peixe).' : null; },
+    });
+  };
+  const camposPov = (v, l) => { const pm = pesoKgDe(v.pm, v.un, l.especie); return { data: v.data, quantidade: num(v.qtd), peso_total_kg: Math.round(num(v.qtd) * pm * 1000) / 1000 }; };
+  el.querySelectorAll('[data-add-pov]').forEach((b) => b.addEventListener('click', async () => {
+    if (!navigator.onLine) return ctx.toast('Sem internet', 'erro');
+    const l = todos.find((x) => x.id === b.dataset.addPov); if (!l) return;
+    const v = await formPov(l, null); if (!v) return;
+    const c = camposPov(v, l);
+    try {
+      await ctx.api.adicionarPovoamento({ lote_id: l.id, ...c }, ctx.state.perfil.id);
+      await ctx.atualizarRef(true);
+      ctx.toast(`+${fmtInt(c.quantidade)} peixes no lote`, 'ok');
+      renderTanque(ctx, el, id, { aberto: l.id });
+    } catch (e) { ctx.toast(e.message, 'erro'); }
+  }));
+  el.querySelectorAll('[data-editar-pov]').forEach((b) => b.addEventListener('click', async () => {
+    if (!navigator.onLine) return ctx.toast('Sem internet', 'erro');
+    const p = povs.find((x) => x.id === b.dataset.editarPov); const l = p && todos.find((x) => x.id === p.lote_id); if (!l) return;
+    const v = await formPov(l, p); if (!v) return;
+    try {
+      await ctx.api.corrigirPovoamento(p.id, camposPov(v, l));
+      await ctx.atualizarRef(true);
+      ctx.toast('Povoamento corrigido', 'ok');
+      renderTanque(ctx, el, id, { aberto: l.id });
+    } catch (e) { ctx.toast(e.message, 'erro'); }
+  }));
+  el.querySelectorAll('[data-excluir-pov]').forEach((b) => b.addEventListener('click', async () => {
+    if (!navigator.onLine) return ctx.toast('Sem internet', 'erro');
+    const p = povs.find((x) => x.id === b.dataset.excluirPov); if (!p) return;
+    if (!(await confirmar({ titulo: 'Excluir este povoamento?', texto: `Os ${fmtInt(p.quantidade)} peixes de ${fmtData(p.data)} saem do total do lote.`, ok: 'Excluir', perigo: true }))) return;
+    try {
+      await ctx.api.excluirPovoamento(p.id);
+      await ctx.atualizarRef(true);
+      ctx.toast('Povoamento excluído', 'ok');
+      renderTanque(ctx, el, id, { aberto: p.lote_id });
+    } catch (e) { ctx.toast(e.message, 'erro'); }
+  }));
 
   el.querySelectorAll('[data-reabrir]').forEach((b) =>
     b.addEventListener('click', async () => {

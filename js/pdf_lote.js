@@ -97,7 +97,7 @@ export function gerarPdfLote(jsPDF, d) {
   txt(`${lote.especie}  ·  ${ROTULO_TIPO[lote.tipo] || lote.tipo}`, M, y + 8, { size: 12.5, color: COR.mudo });
   y += 17;
 
-  const meta = [['Entrada', fmtData(lote.data_entrada)], ['Situação', lote.ativo ? 'Lote ativo' : 'Lote encerrado'], ['Peixes na entrada', fmtInt(lote.quantidade_inicial)], ['Relatório de', fmtData(geradoEm)]];
+  const meta = [['Povoamento', fmtData(lote.data_entrada)], ['Situação', lote.ativo ? 'Lote ativo' : 'Lote encerrado'], ['Peixes na entrada', fmtInt(lote.quantidade_inicial)], ['Relatório de', fmtData(geradoEm)]];
   cor('fill', COR.fundo); doc.roundedRect(M, y, LARG, 16, 5, 5, 'F');
   meta.forEach(([k, v], i) => { const x = M + 6 + ((LARG - 8) / 4) * i; caps(k, x, y + 6); txt(v, x, y + 11.4, { size: 10.5 }); });
   y += 28;
