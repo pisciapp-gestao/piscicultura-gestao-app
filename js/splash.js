@@ -1,7 +1,7 @@
 // Abertura: um tambaqui em 3D vem do fundo da água, chega perto e vira para o lado, revelando o app.
 // Aparece só na primeira abertura do dia, dura ~3,5 s, some ao toque e não roda se o aparelho pede
-// menos movimento. O 3D (Three.js, js/splash3d.bundle.js) carrega sob demanda; se o aparelho não
-// suportar WebGL ou demorar para carregar, cai no peixe vetorial (SVG + CSS) abaixo.
+// menos movimento. O 3D (Three.js, js/splash3d.bundle.js) só abre se já estiver no cache offline; senão, nesse dia
+// fica sem abertura até o cache terminar. O peixe vetorial (SVG + CSS) abaixo é só para aparelho sem WebGL.
 
 const TAMBAQUI = `
 <svg class="tambaqui" viewBox="0 0 200 100" width="250" height="125" aria-hidden="true" focusable="false">
@@ -41,12 +41,32 @@ export function splashDoDia() {
   let saiu = false, parar = () => {};
   const sair = () => { if (saiu) return; saiu = true; parar(); el.classList.add('sai'); setTimeout(() => el.remove(), 320); };
   el.addEventListener('click', sair);
-  abrir3d(el, sair, (f) => { parar = f; }).catch(() => { if (!saiu) fallbackSvg(el, sair); });
+  abrir3d(el, sair, (f) => { parar = f; }).catch((e) => {
+    if (saiu) return;
+    if (e && e.message === 'lento') {
+      // 3D ainda não está guardado no celular (1ª vez ou internet fraca): hoje não mostra nada
+      // (nada do peixe antigo) e libera o dia, para o 3D aparecer na próxima abertura.
+      saiu = true; parar(); el.remove();
+      try { localStorage.removeItem('splash'); } catch { /* sem armazenamento */ }
+      return;
+    }
+    fallbackSvg(el, sair); // só quando o aparelho não tem 3D (WebGL)
+  });
+}
+
+// O 3D só abre na hora se a biblioteca e o peixe já estão no cache offline (o sw.js guarda ao instalar).
+async function jaGuardado() {
+  if (!('caches' in window)) return true;
+  try {
+    const arqs = ['js/splash3d.bundle.js', 'assets/peixe/peixe.bin', 'assets/peixe/cor.jpg', 'assets/peixe/normal.jpg'];
+    return (await Promise.all(arqs.map((a) => caches.match(new URL(a, location.href).href)))).every(Boolean);
+  } catch { return true; }
 }
 
 async function abrir3d(el, sair, registrarParada) {
-  const tempo = new Promise((_, rej) => setTimeout(() => rej(new Error('lento')), 2500));
-  // biblioteca 3D + modelo do peixe (malha e texturas); se passar de 2,5 s, cai no peixe vetorial
+  if (!(await jaGuardado())) throw new Error('lento');
+  const tempo = new Promise((_, rej) => setTimeout(() => rej(new Error('lento')), 4000));
+  // biblioteca 3D + modelo do peixe (malha e texturas); se passar de 4 s, hoje fica sem abertura
   const { mod, dados } = await Promise.race([(async () => { const m = await import('./splash3d.bundle.js'); return { mod: m, dados: await m.carregar('assets/peixe/') }; })(), tempo]);
   if (!el.isConnected) return;
   const canvas = document.createElement('canvas');
