@@ -82,8 +82,13 @@ const alev = { data_entrada: '2026-01-01', quantidade_inicial: 1000, peso_inicia
 assert.equal(avisoPesoMedio({ quantidade: 30, pesoTotalKg: 4.5, lote: alev, r: null, data: '2026-03-02' }), null);
 assert.equal(avisoPesoMedio({ quantidade: 1, pesoTotalKg: 0, lote: alev, r: null, data: '2026-03-02' }), null, 'sem peso não pergunta');
 
-// 7) venda: receita sobre o peso bruto; despesca sem preço não vira zero
-assert.equal(indicadoresDespesca({ quantidade: 100, peso_bruto_kg: 200, peso_liquido_kg: 190, preco_kg: '9.50' }).receita, 1900);
+// 7) venda: receita sobre o peso LÍQUIDO quando informado (pedido do cliente piloto, 15/11/2026); sem líquido, o bruto
+assert.equal(indicadoresDespesca({ quantidade: 100, peso_bruto_kg: 200, peso_liquido_kg: 190, preco_kg: '9.50' }).receita, 1805);
+assert.equal(indicadoresDespesca({ quantidade: 100, peso_bruto_kg: 200, preco_kg: '9.50' }).receita, 1900);
+// o caso real do Rai: 12.568 kg bruto, 12.316 kg líquido (−2%), R$ 11/kg → R$ 135.476 (antes saía R$ 138.248 sobre o bruto)
+{ const r = indicadoresDespesca({ quantidade: 4134, peso_bruto_kg: 12568, peso_liquido_kg: 12316, preco_kg: 11 }); assert.equal(r.receita, 135476); assert.equal(r.receitaSobre, 'líquido'); }
+{ const c2 = calcularLote(lote, bios, mort, rac, D, null, [{ data: D, tipo: 'parcial', quantidade: 10, peso_bruto_kg: 100, peso_liquido_kg: 98, preco_kg: 10 }, { data: D, tipo: 'parcial', quantidade: 5, peso_bruto_kg: 50, preco_kg: 10 }]);
+  assert.equal(c2.receita, 1480); assert.equal(c2.pesoVendido, 148); assert.equal(c2.receitaSobreBruto, 1); }
 assert.equal(indicadoresDespesca({ quantidade: 100, peso_bruto_kg: 200, preco_kg: null }).receita, null);
 const venda = calcularLote(lote, bios, mort, rac, D, null, [{ data: D, tipo: 'parcial', quantidade: 10, peso_bruto_kg: 20, preco_kg: 10 }, { data: D, tipo: 'parcial', quantidade: 10, peso_bruto_kg: 30, preco_kg: null }]);
 assert.equal(venda.receita, 200); assert.equal(venda.despescasSemPreco, 1);

@@ -310,11 +310,14 @@ async function abrirApp(user) {
   // Sem isso, quem perdeu o acesso ainda via os dados guardados ao abrir o app sem internet.
   const apagarCopias = async () => { for (const k of ['perfil', 'ref', 'resumo', 'racao14', 'agua14', 'admin']) await db.kvDel(k); };
   if (!perfil) { if (daRede && guardado) await apagarCopias(); if (state.convite) renderAceitarConvite(ctx, root, user, state.convite); else renderCriarFazenda(ctx, root, user); return; }
-  if (state.convite) { // conta já está numa fazenda: o convite não serve para ela
+  // desativado na fazenda antiga e com convite de outra: pode aceitar e mudar de fazenda (sql/36)
+  if (perfil.ativo === false && state.convite && perfil.papel !== 'dono') { if (daRede) await apagarCopias(); renderAceitarConvite(ctx, root, user, state.convite); return; }
+  if (state.convite) { // conta ainda ATIVA numa fazenda: o convite não serve para ela
     descartarConvite();
-    setTimeout(() => toast('Convite não usado: esta conta já faz parte de uma fazenda.', 'erro'), 600);
+    const de = perfil.fazendas && perfil.fazendas.nome ? ` (${perfil.fazendas.nome})` : '';
+    setTimeout(() => toast(`Convite não usado: esta conta ainda está ativa em outra fazenda${de}. Peça ao dono dela para desativar o seu acesso em Fazenda > Equipe e abra o convite de novo.`, 'erro'), 600);
   }
-  if (perfil.ativo === false) { if (daRede) await apagarCopias(); mostrarMensagem('Acesso desativado', 'Seu acesso a esta fazenda foi desativado. Fale com o dono.'); return; }
+  if (perfil.ativo === false) { if (daRede) await apagarCopias(); mostrarMensagem('Acesso desativado', 'Seu acesso a esta fazenda foi desativado. Fale com o dono. Se for trabalhar em outra fazenda que usa o PisciApp, abra o convite que o novo dono mandar.'); return; }
   // suporte do administrador (sql/34): em suporte o banco mostra a fazenda do cliente, e a própria some (fica parecendo
   // "bloqueada"). Antes dessa conferência, pergunta se há suporte aberto e abre a fazenda do cliente como dono.
   if (daRede && perfil.fazenda_id && !perfil.fazendas) {

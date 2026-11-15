@@ -1108,6 +1108,7 @@ table.cmp td b { font-weight: 600; }
 /* manejo: na ração ou na água lado a lado; dose e unidade na mesma linha */
 #man-via { grid-template-columns: 1fr 1fr; }
 .man-dose { display: grid; grid-template-columns: 1fr 6.5rem; gap: .6rem; }
+.man-dose.desp-liq { grid-template-columns: 7rem 1fr; } /* despesca: desconto (%) curto + peso líquido */
 
 /* água: medições em duas colunas */
 .agua-campos { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; align-items: end; }
@@ -1236,6 +1237,8 @@ table.cmp td b { font-weight: 600; }
 .numeros .num.alerta { border-color: var(--alerta-borda); background: var(--alerta-bg); }
 .numeros .num.erro { border-color: #f5c2bd; background: var(--erro-bg); }
 .numeros.n3 > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+/* a lista de números dos relatórios (.lista.numeros) não é a grade de quadros da Início: uma linha por número */
+.lista.numeros { display: block; margin: 0; }
 .h-tanques { margin: 0 0 1.4rem; }
 .h-tanques > header { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; margin-bottom: .6rem; }
 .h-tanques > header h2 { margin: 0; font-size: 1.05rem; }

@@ -134,7 +134,7 @@ with sync_playwright() as pw:
     est = {'perfis': {D: perfil_dono}}
     b, pg = montar(pw, D, est)
     pg.goto(BASE + '#/convite/' + TOK); pg.wait_for_selector('nav.abas', timeout=20000); pg.wait_for_timeout(1000)
-    checa('já faz parte de uma fazenda' in pg.inner_text('#toast') and pg.evaluate("localStorage.getItem('convite')") is None, 'já tem fazenda: avisa "convite não usado" e descarta')
+    checa('ainda está ativa em outra fazenda' in pg.inner_text('#toast') and 'desativar' in pg.inner_text('#toast') and pg.evaluate("localStorage.getItem('convite')") is None, 'já tem fazenda: avisa "convite não usado" e descarta')
     errE = est['erros'] + est['externos']; b.close()
 
 todos = errA + errB + errC + errD + errE
