@@ -103,8 +103,13 @@ function camposDoTipo(tipo, kgSaco, verDinheiro = false) {
         <input id="desp-qtd" class="grande" type="text" inputmode="numeric" autocomplete="off" placeholder="0" required></label>
       <label>Peso total bruto (kg)
         <input id="desp-bruto" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex.: 9547" required></label>
-      <label>Peso total líquido (kg) <small class="mudo">(opcional)</small>
-        <input id="desp-liquido" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex.: 9356"></label>
+      <div class="man-dose desp-liq">
+        <label>Desconto (%) <small class="mudo">(opcional)</small>
+          <input id="desp-desc" type="text" inputmode="decimal" autocomplete="off" maxlength="5" placeholder="Ex.: 2"></label>
+        <label>Peso total líquido (kg) <small class="mudo">(opcional)</small>
+          <input id="desp-liquido" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex.: 9356"></label>
+      </div>
+      <p class="mudo pequeno" id="desp-desc-ajuda">Digite o % que desconta do bruto (ex.: 2) e o app calcula o peso líquido. A receita é calculada sobre o líquido.</p>
       ${verDinheiro ? `<div class="man-dose desp-venda">
         <label>Preço de venda por kg <small class="mudo">(opcional)</small>
           <span class="com-prefixo"><em>R$</em><input id="desp-preco" type="text" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="0,00"></span></label>
@@ -439,7 +444,7 @@ export async function renderLancar(ctx, el, params = {}) {
       if (i.medioLiquidoKg != null) L.push(`Peso médio líquido: ${pesoMedioTxt(i.medioLiquidoKg)} por peixe`, `Diferença: ${fmtNum(i.difKg, 0)} kg (${fmtNum(i.difPct, 1)}% do bruto)`);
       if (i.peixesHa != null) L.push(`${fmtInt(i.peixesHa)} peixes por hectare`);
       const prTxt = (f.querySelector('#desp-preco') || { value: '' }).value.trim(), pr = prTxt ? numMoeda(prTxt) : null;
-      if (pr > 0) L.push(`Receita: ${fmtBRL(b * pr)} (sobre o peso bruto)`);
+      if (pr > 0) L.push(`Receita: ${fmtBRL(i.kgVendido * pr)} (${fmtNum(i.kgVendido, 0)} kg ${i.receitaSobre} × ${fmtBRL(pr)})`);
       box.textContent = L.join('\n'); box.hidden = false;
     };
     f.querySelectorAll('#desp-tipo .tile').forEach((b) => b.addEventListener('click', () => {
@@ -447,6 +452,19 @@ export async function renderLancar(ctx, el, params = {}) {
       f.querySelectorAll('#desp-tipo .tile').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(on)); });
       pintarDica();
     }));
+    // desconto em % (sugestão do cliente piloto, 15/11/2026): bruto − % = líquido, sem sair do app para a calculadora.
+    // O último % usado fica guardado no aparelho e já vem preenchido na próxima despesca.
+    const descEl = f.querySelector('#desp-desc'), liqEl = f.querySelector('#desp-liquido'), brutoEl = f.querySelector('#desp-bruto');
+    try { const g = localStorage.getItem('despesca_desconto'); if (g) descEl.value = g; } catch { /* sem armazenamento */ }
+    const aplicarDesconto = () => {
+      const d = numDecimal(descEl.value), b = numDecimal(brutoEl.value);
+      if (!String(descEl.value).trim() || !(d > 0 && d < 50) || !(b > 0) || (brutoEl.value.includes('.') && brutoEl.value.includes(','))) return;
+      const lq = Math.round(b * (1 - d / 100) * 10) / 10;
+      liqEl.value = String(lq).replace('.', ',');
+    };
+    descEl.addEventListener('input', () => { aplicarDesconto(); contas(); });
+    brutoEl.addEventListener('input', aplicarDesconto);
+    liqEl.addEventListener('input', () => { descEl.value = ''; }); // líquido digitado à mão: vale o que foi digitado
     ['#desp-qtd', '#desp-bruto', '#desp-liquido', '#desp-preco'].forEach((s) => { const c = f.querySelector(s); if (c) c.addEventListener('input', contas); });
     selTanque.addEventListener('change', contas);
     pintarDica();
@@ -635,6 +653,9 @@ export async function renderLancar(ctx, el, params = {}) {
       if (!(b > 0)) return mostrarErro('Informe o peso total bruto em kg.');
       if (lqTxt && !(lq > 0)) return mostrarErro('Confira o peso líquido em kg, ou deixe em branco.');
       if (lq != null && lq > b) return mostrarErro('O peso líquido não pode ser maior que o bruto.');
+      const descTxt = (f.querySelector('#desp-desc') || { value: '' }).value.trim(), desc = descTxt ? numDecimal(descTxt) : null;
+      if (descTxt && !(desc > 0 && desc < 50)) return mostrarErro('Confira o desconto: um número entre 0 e 50 (ex.: 2 para 2%), ou deixe em branco.');
+      try { if (desc > 0) localStorage.setItem('despesca_desconto', descTxt); } catch { /* sem armazenamento */ }
       const lote = lotes.find((l) => l.id === lote_id);
       if (lote && data < lote.data_entrada) return mostrarErro(`A data não pode ser antes da entrada do lote (${fmtData(lote.data_entrada)}).`);
       const [despescaLigada, dados] = await Promise.all([

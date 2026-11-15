@@ -43,7 +43,7 @@ export function gerarPdfDespesca(jsPDF, d) {
     ...(i.peixesHa != null ? [['Peixes por hectare', `${fmtInt(i.peixesHa)} peixes/ha`]] : []),
     ...(x.preco_kg != null ? [['Preço de venda', `${fmtBRL(x.preco_kg)} por kg`]] : []),
     ...(x.comprador ? [['Comprador', x.comprador]] : []),
-    ...(i.receita != null ? [['Receita (sobre o peso bruto)', fmtBRL(i.receita)]] : []),
+    ...(i.receita != null ? [[`Receita (${fmtNum(i.kgVendido, 0)} kg ${i.receitaSobre} x ${fmtBRL(x.preco_kg)})`, fmtBRL(i.receita)]] : []),
   ]);
 
   const nota = quebra(`Gerado em ${fmtData(geradoEm)}. A conversão alimentar e a sobrevivência do lote estão no relatório do lote.`, LARG, 8, false);

@@ -33,6 +33,7 @@ export function gerarPdfLucro(jsPDF, d) {
   bloco('Produção', [
     ['Peixes retirados', fmtInt(c.despescados)],
     ['Peso bruto retirado', `${fmtNum(c.pesoDespescado, 0)} kg`],
+    ...(c.pesoVendido != null && Math.abs(c.pesoVendido - c.pesoDespescado) > 0.5 ? [['Peso vendido (líquido)', `${fmtNum(c.pesoVendido, 0)} kg`]] : []),
     ...(f.custoKg != null ? [['Custo por kg vendido', fmtBRL(f.custoKg)]] : []),
     ...(c.ca != null ? [['Conversão alimentar', fmtNum(c.ca, 2)]] : []),
     ...(c.sobrevivencia != null ? [['Sobrevivência', `${fmtNum(c.sobrevivencia, 1)}%`]] : []),

@@ -16,7 +16,10 @@ export function indicadoresDespesca(d, areaHa) {
     difKg: l != null ? b - l : null,
     difPct: l != null && b > 0 ? ((b - l) / b) * 100 : null,
     peixesHa: Number(areaHa) > 0 && q > 0 ? q / Number(areaHa) : null,
-    receita: Number(d.preco_kg) > 0 && b > 0 ? b * Number(d.preco_kg) : null, // sobre o peso bruto
+    // receita sobre o peso VENDIDO: o líquido quando informado (o bruto menos a quebra), senão o bruto
+    kgVendido: l != null && l > 0 ? l : b,
+    receitaSobre: l != null && l > 0 ? 'líquido' : 'bruto',
+    receita: Number(d.preco_kg) > 0 && b > 0 ? (l != null && l > 0 ? l : b) * Number(d.preco_kg) : null,
   };
 }
 
@@ -62,7 +65,11 @@ export function calcularLote(lote, bios, mort, rac, hoje, precoKg = null, desp =
   const despescados = soma(desp, 'quantidade');
   const pesoDespescado = soma(desp, 'peso_bruto_kg');
   const comPreco = desp.filter((d) => Number(d.preco_kg) > 0);
-  const receita = comPreco.length ? comPreco.reduce((s, d) => s + Number(d.peso_bruto_kg) * Number(d.preco_kg), 0) : null;
+  // kg vendido de cada despesca: o peso líquido quando informado, senão o bruto (pedido do cliente piloto, 15/11/2026)
+  const vendido = (d) => (d.peso_liquido_kg != null && Number(d.peso_liquido_kg) > 0 ? Number(d.peso_liquido_kg) : Number(d.peso_bruto_kg) || 0);
+  const pesoVendido = desp.reduce((s, d) => s + vendido(d), 0);
+  const receita = comPreco.length ? comPreco.reduce((s, d) => s + vendido(d) * Number(d.preco_kg), 0) : null;
+  const receitaSobreBruto = comPreco.filter((d) => !(d.peso_liquido_kg != null && Number(d.peso_liquido_kg) > 0)).length;
   const fechado = !lote.ativo && desp.some((d) => d.tipo === 'total'); // a despesca total contou os peixes de verdade
   const vivos = fechado ? 0 : Math.max(0, qtdInicial - mortos - despescados);
   const racaoTotal = soma(rac, 'quantidade_kg');
@@ -105,7 +112,9 @@ export function calcularLote(lote, bios, mort, rac, hoje, precoKg = null, desp =
     vivos,
     despescados,
     pesoDespescado,
+    pesoVendido,
     receita,
+    receitaSobreBruto, // despescas com preço mas sem peso líquido: a receita delas usa o bruto
     despescasSemPreco: desp.length - comPreco.length,
     // retirado também sobreviveu; na despesca total vale a contagem real (no máximo 100%)
     sobrevivencia: qtdInicial > 0 ? Math.min(100, ((fechado ? despescados : Math.max(0, qtdInicial - mortos)) / qtdInicial) * 100) : null,
@@ -290,7 +299,7 @@ export function fecharCiclo({ c, custoAlevino = null, despesas = 0, fechado = fa
     receita: c.receita, custoRacao: c.custoRacao, custoAlevino, despesas, custoTotal, lucro, faltando,
     completo: fechado && !faltando.length,
     margem: lucro != null && c.receita > 0 ? lucro / c.receita : null,
-    custoKg: c.pesoDespescado > 0 ? custoTotal / c.pesoDespescado : null,
+    custoKg: (c.pesoVendido ?? c.pesoDespescado) > 0 ? custoTotal / (c.pesoVendido ?? c.pesoDespescado) : null, // por kg vendido (líquido)
   };
 }
 

@@ -266,7 +266,7 @@ export async function renderRelatorioLote(ctx, el, id) {
         ${linhaNum('Dias de cultivo', fmtInt(c.diasCultivo))}
         ${linhaNum(lote.ativo ? 'Peixes vivos (estim.)' : 'Peixes no tanque', fmtInt(c.vivos), `${fmtPct(c.sobrevivencia)}% de sobrevivência · ${fmtInt(c.mortos)} mortos`)}
         ${c.despescados ? linhaNum('Peixes retirados', fmtInt(c.despescados), gerir ? `${fmtNum(c.pesoDespescado, 0)} kg de peso bruto` : '') : ''}
-        ${ctx.verDinheiro() && c.despescados ? linhaNum('Receita das despescas', c.receita != null ? fmtBRL(c.receita) : '—', c.receita == null ? 'informe o preço de venda na despesca' : c.despescasSemPreco ? `falta o preço em ${fmtInt(c.despescasSemPreco)} ${c.despescasSemPreco === 1 ? 'despesca' : 'despescas'}` : 'sobre o peso bruto') : ''}
+        ${ctx.verDinheiro() && c.despescados ? linhaNum('Receita das despescas', c.receita != null ? fmtBRL(c.receita) : '—', c.receita == null ? 'informe o preço de venda na despesca' : c.despescasSemPreco ? `falta o preço em ${fmtInt(c.despescasSemPreco)} ${c.despescasSemPreco === 1 ? 'despesca' : 'despescas'}` : c.receitaSobreBruto ? 'sobre o peso líquido; sem líquido informado, o bruto' : 'sobre o peso líquido') : ''}
         ${linhaNum('Biomassa estimada', c.biomassaAtual != null ? fmtNum(c.biomassaAtual, 0) + ' kg' : '—', `na entrada: ${fmtNum(c.biomassaInicial, 0)} kg`)}
         ${ctx.verDinheiro() ? linhaNum('Custo de ração', c.custoRacao != null ? fmtBRL(c.custoRacao) : '—', c.custoRacao != null ? 'pelo preço médio pago por kg' : 'registre o valor nas compras') : ''}
         ${ctx.verDinheiro() ? linhaNum('Custo de ração por kg produzido', c.custoKgProduzido != null ? fmtBRL(c.custoKgProduzido) : '—', c.custoKgProduzido != null ? 'ração até a última biometria ÷ peixe que ganhou peso' : 'precisa de preço nas compras e biometria com ganho') : ''}
@@ -322,7 +322,7 @@ export async function renderRelatorioLote(ctx, el, id) {
           ${i.medioLiquidoKg != null ? linhaNum('Peso médio por peixe (líquido)', pesoMedioTxt(i.medioLiquidoKg)) : ''}
           ${i.peixesHa != null ? linhaNum('Peixes por hectare', `${fmtInt(i.peixesHa)} peixes/ha`) : ''}
           ${d.preco_kg != null ? linhaNum('Preço de venda', `${fmtBRL(d.preco_kg)}/kg`, d.comprador ? esc(d.comprador) : '') : d.comprador ? linhaNum('Comprador', esc(d.comprador)) : ''}
-          ${i.receita != null ? linhaNum('Receita', fmtBRL(i.receita), 'sobre o peso bruto') : ''}
+          ${i.receita != null ? linhaNum('Receita', fmtBRL(i.receita), `${fmtNum(i.kgVendido, 0)} kg ${i.receitaSobre} × ${fmtBRL(d.preco_kg)}`) : ''}
         </ul>
         <button class="btn no-print" type="button" data-pdf-desp="${esc(d.id)}">Gerar PDF desta despesca</button></div></section>`;
     };
