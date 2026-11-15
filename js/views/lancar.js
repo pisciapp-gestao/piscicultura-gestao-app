@@ -109,7 +109,7 @@ function camposDoTipo(tipo, kgSaco, verDinheiro = false) {
         <label>Peso total líquido (kg) <small class="mudo">(opcional)</small>
           <input id="desp-liquido" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex.: 9356"></label>
       </div>
-      <p class="mudo pequeno" id="desp-desc-ajuda">Digite o % que desconta do bruto (ex.: 2) e o app calcula o peso líquido. A receita é calculada sobre o líquido.</p>
+      <p class="mudo pequeno" id="desp-desc-ajuda">Informe o desconto (ex.: 2%) e o peso líquido é preenchido sozinho.</p>
       ${verDinheiro ? `<div class="man-dose desp-venda">
         <label>Preço de venda por kg <small class="mudo">(opcional)</small>
           <span class="com-prefixo"><em>R$</em><input id="desp-preco" type="text" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="0,00"></span></label>
