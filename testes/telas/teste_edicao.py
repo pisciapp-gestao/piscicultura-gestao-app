@@ -134,7 +134,7 @@ with sync_playwright() as pw:
     pg.screenshot(path='tanque.png', full_page=True)
     checa(pg.locator(f'[data-reabrir="{L2}"]').count() == 1 and pg.locator(f'[data-reabrir="{L1}"]').count() == 0, 'Reabrir aparece só no lote encerrado')
     pg.click(f'[data-editar-lote="{L1}"]'); pg.wait_for_selector('.dialogo form')
-    pg.fill('.dialogo [name=especie]', 'Tambacu'); pg.fill('.dialogo [name=qtd]', '1200'); pg.fill('.dialogo [name=pm]', '0,05')
+    pg.fill('.dialogo [name=especie]', 'Tambacu'); pg.fill('.dialogo [name=qtd]', '1200'); pg.fill('.dialogo [name=pm]', '0,05'); pg.select_option('.dialogo [name=un]', 'kg')
     pg.click('.dialogo button[type=submit]'); pg.wait_for_timeout(800)
     checa(('lotes', L1, {'tipo': 'engorda', 'especie': 'Tambacu', 'data_entrada': '2026-09-01', 'quantidade_inicial': 1200, 'peso_inicial_kg': 60}) in patches, 'lote: grava espécie, quantidade e peso (1.200 × 0,05 kg = 60 kg)')
     abrir_dobra(pg, f'details[data-lote="{L2}"]'); pg.wait_for_selector(f'[data-reabrir="{L2}"]')
