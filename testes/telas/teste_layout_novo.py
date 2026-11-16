@@ -110,7 +110,7 @@ def rodar(papel, largura):
         # tocar no tanque: janela com as ações
         pg.locator('.rl-tq', has_text='Tanque 3').click(); pg.wait_for_selector('.folha-acoes', timeout=5000); pg.wait_for_timeout(300)
         acoes = pg.eval_on_selector_all('.folha-acoes [data-acao]', 'els => els.map(e => e.dataset.acao)')
-        esperado = ['racao', 'mortalidade', 'agua', 'biometria', 'manejo'] + (['despesca'] if papel == 'dono' else [])
+        esperado = ['racao', 'mortalidade', 'agua', 'biometria', 'manejo'] + (['despesca', 'transferencia'] if papel == 'dono' else [])
         checa(acoes == esperado, f'{rot}: janela do tanque com as ações {esperado} ({acoes})')
         checa('dar 2 sacos' in pg.inner_text('.folha-acoes'), f'{rot}: a janela diz quanto dar de ração')
         pg.screenshot(path=f'layout_janela_{papel}_{largura}.png')
