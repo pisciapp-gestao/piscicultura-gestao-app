@@ -480,6 +480,7 @@ function montarShell() {
     </aside>
     <main id="view" class="view"></main>
     <nav class="abas" aria-label="Navegação">
+      <i class="abas-ind" aria-hidden="true"></i>
       ${links.map(([aba, href, ic, txt]) => `<a data-aba="${aba}" href="${href}"><span>${icone(ic)}</span>${txt}</a>`).join('')}
     </nav>
   </div>`;
@@ -498,6 +499,16 @@ function renderErro(el, e) {
   el.querySelector('#b-retry').addEventListener('click', async () => { if (Date.now() < redeMortaAte) await testarRede(); rotear(); });
 }
 
+// marcador da aba de baixo: desliza até a aba acesa (css: .abas-ind). Na primeira vez só aparece no lugar.
+function moverIndicador() {
+  const nav = document.querySelector('.abas');
+  if (!nav) return;
+  const i = [...nav.querySelectorAll('a')].findIndex((a) => a.classList.contains('on'));
+  nav.style.setProperty('--i', Math.max(i, 0));
+  nav.classList.toggle('tem-ind', i >= 0);
+  if (!nav.classList.contains('pronta')) requestAnimationFrame(() => requestAnimationFrame(() => nav.classList.add('pronta')));
+}
+
 async function rotear() {
   const view = document.getElementById('view');
   if (!view || !state.perfil) return;
@@ -512,10 +523,12 @@ async function rotear() {
     a.classList.toggle('on', on);
     if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
+  moverIndicador();
 
   marcarAtalho(rota === 'relatorio' && partes[0] === 'racao' ? 'relatorio-racao' : rota);
   registrarRota(location.hash, rota, partes);
   const el = document.createElement('div'); // contêiner novo por rota: renderizações atrasadas não sujam a tela atual
+  el.className = 'tela-entra'; // troca de tela suave (css: .tela-entra)
   view.replaceChildren(...(ehAbaPrincipal(rota, partes) ? [] : [linhaVoltar(rota)]), el);
   const meu = ++tokenRota;
   window.scrollTo(0, 0);

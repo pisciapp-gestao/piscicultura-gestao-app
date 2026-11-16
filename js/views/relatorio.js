@@ -376,6 +376,7 @@ export async function renderRelatorioLote(ctx, el, id) {
   function pintar() {
     el.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.aba === aba));
     painel.innerHTML = paineis[aba]();
+    painel.classList.remove('painel-entra'); void painel.offsetWidth; painel.classList.add('painel-entra'); // troca de aba suave
     painel.querySelectorAll('[data-del]').forEach((b) =>
       b.addEventListener('click', async () => {
         const [tab, rid] = b.dataset.del.split(':');
