@@ -516,6 +516,7 @@ async function rotear() {
   marcarAtalho(rota === 'relatorio' && partes[0] === 'racao' ? 'relatorio-racao' : rota);
   registrarRota(location.hash, rota, partes);
   const el = document.createElement('div'); // contêiner novo por rota: renderizações atrasadas não sujam a tela atual
+  el.className = 'tela-entra'; // troca de tela suave (css: .tela-entra)
   view.replaceChildren(...(ehAbaPrincipal(rota, partes) ? [] : [linhaVoltar(rota)]), el);
   const meu = ++tokenRota;
   window.scrollTo(0, 0);
