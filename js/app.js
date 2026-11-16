@@ -1,6 +1,7 @@
 // Ponto de entrada: sessão, perfil, roteamento, sincronização offline.
 import { SUPABASE_URL, SUPABASE_ANON_KEY, TIMEOUT_REDE_MS, TIMEOUT_LEITURA_MS, LIMITE_ABERTURA_MS, JANELA_SEM_REDE_MS, TERMOS_VERSAO } from './config.js';
 import { iniciarSeg } from './seg.js';
+import { iniciarSanfona } from './sanfona.js';
 import { DEV_LOGIN, loginAutomaticoAtivo } from './dev-login.js';
 import { esc, parseHash, ROTULO_PAPEL, traduzErro, ehErroDeRede, plural, ligarMascaraMoeda } from './util.js';
 import { criarApi } from './api.js';
@@ -528,7 +529,9 @@ async function rotear() {
   marcarAtalho(rota === 'relatorio' && partes[0] === 'racao' ? 'relatorio-racao' : rota);
   registrarRota(location.hash, rota, partes);
   const el = document.createElement('div'); // contêiner novo por rota: renderizações atrasadas não sujam a tela atual
-  el.className = 'tela-entra'; // troca de tela suave (css: .tela-entra)
+  // ao abrir qualquer tela, os blocos entram em cascata, um logo depois do outro (css: .cascata).
+  // Só na abertura: depois a classe sai, e redesenhos dentro da tela (digitar, escolher) não repetem o efeito.
+  el.className = 'cascata';
   view.replaceChildren(...(ehAbaPrincipal(rota, partes) ? [] : [linhaVoltar(rota)]), el);
   const meu = ++tokenRota;
   window.scrollTo(0, 0);
@@ -556,6 +559,7 @@ async function rotear() {
   } catch (e) {
     if (meu === tokenRota) renderErro(el, e);
   }
+  setTimeout(() => el.classList.remove('cascata'), 600); // a cascata mais longa termina em ~490 ms
   atualizarLateral(ctx).catch(() => {}); // resumo do dia na lateral (computador)
 }
 
@@ -600,6 +604,7 @@ function criarCliente() {
 
 async function iniciar() {
   iniciarSeg();
+  iniciarSanfona(); // balões que abrem e fecham deslizam
   if (SUPABASE_ANON_KEY.startsWith('COLE_') || !window.supabase) {
     mostrarMensagem('Configuração pendente', 'A chave do Supabase ainda não foi configurada neste app (js/config.js).', false);
     return;
