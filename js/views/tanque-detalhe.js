@@ -29,7 +29,7 @@ export function htmlCardTanque(tanque, lotes, resumo, racaoHojeLocal, hoje, meta
             <div><span>Dias no tanque</span><b>${fmtInt(dias)}</b></div>
             <div><span>Peixes vivos (estim.)</span><b>${fmtInt(vivos ?? l.quantidade_inicial)}</b></div>
           </div>
-          ${vivos != null && l.quantidade_inicial > 0 ? ((sv) => `<div class="td-sobre">${progresso((sv / l.quantidade_inicial) * 100, { tom: 'ok', rotulo: `Sobrevivência ${fmtPct((sv / l.quantidade_inicial) * 100)}%` })}<p class="h-trilho-leg"><span>Sobrevivência: ${fmtInt(sv)} de ${fmtInt(l.quantidade_inicial)} peixes${Number(r.despescados) ? ` (${fmtInt(r.despescados)} já despescados)` : ''}</span><b>${fmtPct((sv / l.quantidade_inicial) * 100)}%</b></p></div>`)(Math.max(0, l.quantidade_inicial - (Number(r.mortos) || 0))) : ''}
+          ${vivos != null && l.quantidade_inicial > 0 ? ((sv) => `<div class="td-sobre">${progresso((sv / l.quantidade_inicial) * 100, { tom: 'ok', rotulo: `Sobrevivência ${fmtPct((sv / l.quantidade_inicial) * 100)}%` })}<p class="h-trilho-leg"><span>Sobrevivência: ${fmtInt(sv)} de ${fmtInt(l.quantidade_inicial)} peixes${Number(r.despescados) ? ` (${fmtInt(r.despescados)} já despescados)` : ''}${Number(r.transferidos) ? ` (${fmtInt(r.transferidos)} transferidos)` : ''}</span><b>${fmtPct((sv / l.quantidade_inicial) * 100)}%</b></p></div>`)(Math.max(0, l.quantidade_inicial - (Number(r.mortos) || 0))) : ''}
           ${r ? `<div class="td-prev"><div class="td-prev-cab"><span>${PROXIMA_FASE[l.tipo] ? 'Mudança de fase' : 'Despesca'}</span><button class="link" type="button" data-meta="${esc(l.id)}">Mudar meta</button></div>${htmlPrevisao(previsaoDespesca(l, r, metaDe(l, metas), hoje), l.tipo)}</div>` : ''}
         </section>`;
       }).join('')

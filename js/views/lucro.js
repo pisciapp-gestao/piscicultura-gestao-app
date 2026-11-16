@@ -1,6 +1,6 @@
 // Lucro por ciclo e despesas gerais (só o dono: valores em R$; precisam de internet).
 import { esc, fmtData, fmtInt, fmtNum, fmtBRL, hojeISO, numDecimal, numMoeda, moedaCampo, ROTULO_TIPO, nomeArquivo, dataArquivo } from '../util.js';
-import { calcularLote, fimDoLote, precoRacaoDoLote, pesoProduzido, ratearDespesas, fecharCiclo } from '../calc.js';
+import { calcularLote, fimDoLote, precoRacaoDoLote, pesoProduzido, ratearDespesas, fecharCiclo, custoAlevinoComTransf } from '../calc.js';
 import { CATEGORIAS_DESPESA } from '../config.js';
 import { confirmar, formulario } from '../dialogo.js';
 import { carregarGerador, carregarFontes, abrirVisualizador } from '../pdf_ui.js';
@@ -24,14 +24,19 @@ export async function renderLucro(ctx, el) {
   const custoDe = Object.fromEntries(custos.map((x) => [x.lote_id, Number(x.custo_alevino)]));
   const dados = await Promise.all(lotes.map(async (l) => {
     const d = await ctx.api.dadosLote(l.id, { venda: true });
-    const temReg = d.bios.length || d.mort.length || d.rac.length || d.desp.length;
-    const fim = l.ativo || !temReg ? hoje : fimDoLote(l, d.bios, d.mort, d.rac, hoje, d.desp);
-    return { l, d, fim, c: calcularLote(l, d.bios, d.mort, d.rac, fim, precoRacaoDoLote(compras, l.tipo), d.desp) }; // preço da ração que o lote come
+    const temReg = d.bios.length || d.mort.length || d.rac.length || d.desp.length || (d.transf || []).length;
+    const fim = l.ativo || !temReg ? hoje : fimDoLote(l, d.bios, d.mort, d.rac, hoje, d.desp, d.transf);
+    return { l, d, fim, c: calcularLote(l, d.bios, d.mort, d.rac, fim, precoRacaoDoLote(compras, l.tipo), d.desp, d.transf) }; // preço da ração que o lote come
   }));
-  const { porLote, semRateio } = ratearDespesas(despesas, dados.map((x) => ({ id: x.l.id, ini: x.l.data_entrada, fim: x.fim, peso: pesoProduzido(x.c) })));
-  const ciclos = dados.map((x) => {
+  // o custo do alevino vai junto com os peixes nas transferências (sql/37)
+  const transfs = [...new Map(dados.flatMap((x) => x.d.transf || []).map((t) => [t.id, t])).values()];
+  const alevino = transfs.length ? custoAlevinoComTransf(lotes, custoDe, transfs) : null;
+  const custoAlevinoDe = (id) => (alevino ? alevino[id] : id in custoDe ? custoDe[id] : null);
+  const { porLote, semRateio } = ratearDespesas(despesas, dados.filter((x) => !x.c.tudoTransferido).map((x) => ({ id: x.l.id, ini: x.l.data_entrada, fim: x.fim, peso: pesoProduzido(x.c) })));
+  // lote que esvaziou passando os peixes adiante não é ciclo de venda: o custo dele já foi junto com os peixes
+  const ciclos = dados.filter((x) => !x.c.tudoTransferido).map((x) => {
     const fechado = !x.l.ativo && x.d.desp.some((d) => d.tipo === 'total');
-    return { ...x, fechado, f: fecharCiclo({ c: x.c, custoAlevino: x.l.id in custoDe ? custoDe[x.l.id] : null, despesas: porLote[x.l.id] || 0, fechado }) };
+    return { ...x, fechado, f: fecharCiclo({ c: x.c, custoAlevino: custoAlevinoDe(x.l.id), despesas: porLote[x.l.id] || 0, fechado }) };
   });
   const fechados = ciclos.filter((x) => x.fechado).sort((a, b) => (b.f.margem ?? -1e9) - (a.f.margem ?? -1e9));
   const andamento = ciclos.filter((x) => !x.fechado && x.l.ativo);

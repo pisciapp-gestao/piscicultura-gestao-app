@@ -137,6 +137,15 @@ export function criarApi(client) {
       if (r.error && /area_ha/i.test(r.error.message || '')) throw new Error('A área do tanque ainda não foi ativada neste sistema (falta rodar o sql/17 no Supabase).');
       ok(r);
     },
+    // transferência de peixes (sql/37): sai de um lote e vai para um ou mais tanques. Só com internet.
+    async registrarTransferencia({ grupo, loteOrigem, data, destinos, esvaziou }) {
+      return ok(await client.rpc('registrar_transferencia', { p_grupo: grupo, p_lote_origem: loteOrigem, p_data: data, p_destinos: destinos, p_esvaziou: !!esvaziou }));
+    },
+    async desfazerTransferencia(grupo) { return ok(await client.rpc('desfazer_transferencia', { p_grupo: grupo })); },
+    // todas as transferências que o usuário enxerga (para o lucro: o custo que veio junto). Sem o sql/37: lista vazia
+    async transferencias() {
+      return todos(() => client.from('transferencias').select('id,grupo,data,lote_origem,lote_destino,quantidade,peso_medio_kg,racao_kg,criou_lote,encerrou_origem').order('data').order('id')).catch(() => []);
+    },
     async criarLote(lote) {
       const id = uuid();
       const r = await client.from('lotes').insert({ id, ...lote });
@@ -302,7 +311,7 @@ export function criarApi(client) {
     // ----- relatório de um lote -----
     // venda: true só para o dono (preço e comprador vêm da tabela só dele, sql/28)
     async dadosLote(loteId, { venda = false } = {}) {
-      const [bios, mort, rac, desp, man] = await Promise.all([
+      const [bios, mort, rac, desp, man, transf] = await Promise.all([
         todos(() => client.from('biometrias').select('id,data,peso_amostra_kg,quantidade_amostrada,registrado_por,criado_em').eq('lote_id', loteId).order('data').order('id')),
         todos(() => client.from('mortalidade').select('id,data,quantidade,causa,registrado_por,criado_em').eq('lote_id', loteId).order('data').order('id'))
           .catch(() => todos(() => client.from('mortalidade').select('id,data,quantidade,registrado_por,criado_em').eq('lote_id', loteId).order('data').order('id'))),
@@ -311,6 +320,9 @@ export function criarApi(client) {
         todos(() => client.from('despescas').select('id,uuid_local,data,tipo,quantidade,peso_bruto_kg,peso_liquido_kg,registrado_por').eq('lote_id', loteId).order('data').order('id'))
           .catch(() => []),
         todos(() => client.from('manejos').select('id,data,tipo,produto,dose,unidade,via,obs,registrado_por,criado_em').eq('lote_id', loteId).order('data').order('id')).catch(() => []), // sem o sql/21: segue sem manejos
+        // transferências (sql/37): as que saíram deste lote e as que chegaram nele. Sem o sql/37: segue sem elas
+        todos(() => client.from('transferencias').select('id,grupo,data,lote_origem,lote_destino,quantidade,peso_medio_kg,racao_kg,criou_lote,encerrou_origem,registrado_por,criado_em')
+          .or(`lote_origem.eq.${loteId},lote_destino.eq.${loteId}`).order('data').order('id')).catch(() => []),
       ]);
       if (venda && desp.length) {
         const vendas = await todos(() => client.from('despesca_vendas').select('despesca_uuid,preco_kg,comprador').in('despesca_uuid', desp.map((d) => d.uuid_local)).order('despesca_uuid'))
@@ -320,7 +332,7 @@ export function criarApi(client) {
           for (const d of desp) { const v = por.get(d.uuid_local); d.preco_kg = v && v.preco_kg != null ? Number(v.preco_kg) : null; d.comprador = (v && v.comprador) || null; }
         }
       }
-      return { bios, mort, rac, desp, man };
+      return { bios, mort, rac, desp, man, transf };
     },
     // ração de todos os tanques visíveis ao usuário a partir de uma data (para a tabela dia × tanque)
     async racaoPeriodo(desde) {

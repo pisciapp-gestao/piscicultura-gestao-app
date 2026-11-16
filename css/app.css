@@ -1406,3 +1406,37 @@ a.acao:active, .rl-tq:active { transform: scale(.98); }
 .pedidos-resp li { display: flex; align-items: flex-start; gap: .6rem; }
 .pedidos-resp .esq { flex: 1; min-width: 0; display: grid; gap: .1rem; }
 .pedidos-resp .sit { flex: none; }
+
+/* ---------- transferência de peixes (sql/37, 16/11/2026) ---------- */
+.tf-de { display: flex; justify-content: space-between; align-items: center; gap: .8rem; }
+.tf-de > div { min-width: 0; }
+.tf-de b { display: block; font-size: 1.3rem; font-weight: 600; letter-spacing: -.015em; line-height: 1.2; overflow-wrap: anywhere; }
+.tf-de small { display: block; color: var(--tinta-2); font-size: .86rem; margin-top: .15rem; }
+.tf-dest { border: 1px solid var(--linha); border-radius: var(--r-card); padding: .8rem .85rem .9rem; display: grid; gap: .6rem; background: var(--card); }
+.tf-dest-t { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.tf-dest-t b { font-size: 1.05rem; overflow-wrap: anywhere; }
+.tf-x { border: 0; background: none; color: var(--tinta-2); font-size: 1.35rem; line-height: 1; padding: 4px 8px; min-width: 40px; min-height: 40px; cursor: pointer; }
+.tf-duas { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.tf-duas label { display: grid; gap: .3rem; font-size: .86rem; color: var(--tinta-2); font-weight: 500; }
+.tf-duas input { width: 100%; }
+.tf-leva { margin: 0; font-size: .86rem; color: var(--tinta-2); line-height: 1.45; }
+.tf-leva b { color: var(--tinta); font-weight: 600; }
+.tf-leva select { font: inherit; font-weight: 600; color: var(--tinta); padding: .15rem .3rem; border-radius: 8px; }
+.tf-add { border: 1.5px dashed var(--linha); background: none; border-radius: var(--r-card); padding: .85rem; font: inherit; font-weight: 600; color: var(--rio); width: 100%; cursor: pointer; }
+.tf-saldo { display: grid; gap: .35rem; }
+.tf-saldo div { display: flex; justify-content: space-between; gap: .6rem; font-size: .93rem; }
+.tf-saldo div b { font-variant-numeric: tabular-nums; text-align: right; }
+.tf-saldo .tot { border-top: 1px solid var(--linha); padding-top: .45rem; margin-top: .15rem; font-weight: 600; }
+.tf-aviso { margin: 0; font-size: .86rem; padding: .6rem .75rem; border-radius: 10px; background: var(--campo-bg); color: var(--tinta); }
+.tf-check { display: flex; gap: .6rem; align-items: flex-start; font-weight: 500; font-size: .95rem; }
+.tf-check input { width: 22px; height: 22px; margin: .1rem 0 0; flex: none; accent-color: var(--rio); }
+.tf-check small { display: block; color: var(--tinta-2); font-weight: 400; font-size: .82rem; margin-top: .15rem; }
+.tf-lista { list-style: none; margin: 0; padding: 0; }
+.tf-lin { display: grid; grid-template-columns: auto 1fr; gap: .7rem; padding: .75rem 0; border-top: 1px solid var(--linha); }
+.tf-lin:first-child { border-top: 0; padding-top: 0; }
+.tf-ic { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--campo-bg); font-size: .95rem; }
+.tf-lin b { display: block; font-size: .93rem; font-weight: 600; }
+.tf-lin small { display: block; color: var(--tinta-2); font-size: .84rem; }
+.tf-lin .tf-data { font-size: .78rem; margin-bottom: .1rem; }
+.tf-lin-c + .tf-lin-c { margin-top: .4rem; }
+.tf-desfazer { margin-top: .35rem; font-size: .84rem; padding: 0; }
