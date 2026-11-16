@@ -129,6 +129,8 @@ export async function renderLancar(ctx, el, params = {}) {
   const { state } = ctx;
   const tiposVisiveis = Object.entries(TIPOS).filter(([, v]) => !v.gerir || ctx.podeGerir());
   const tipo = tiposVisiveis.some(([k]) => k === params.tipo) ? params.tipo : 'racao';
+  // trocou de aba (Ração → Biometria...): o formulário novo entra em cascata, como uma tela nova
+  if (params.de !== undefined && el.classList) { el.classList.add('cascata'); setTimeout(() => el.classList.remove('cascata'), 600); }
   // de onde veio (ronda ou tela do tanque): depois de salvar, o "voltar" leva para lá
   const volta = params.volta === 'ronda' || params.volta === 't' ? params.volta : '';
   const { tanques, lotes } = state.ref;

@@ -777,13 +777,23 @@ body.sem-rolagem { overflow: hidden; }
 .tela-entra { animation: tela-entra .2s var(--ease) both; }
 .painel-entra { animation: so-aparece .15s var(--ease) both; }
 .hoje-tanques .tq, .lista-grade > li { animation: tela-entra .22s var(--ease) both; }
-/* Hoje, Relatórios e Fazenda: cada bloco da tela entra 35ms depois do anterior (no máximo 8 degraus) */
-.tela-entra.cascata { animation: none; }
-.cascata > * { animation: tela-entra .24s var(--ease) both; }
-.cascata > :nth-child(2) { animation-delay: 35ms; } .cascata > :nth-child(3) { animation-delay: 70ms; }
-.cascata > :nth-child(4) { animation-delay: 105ms; } .cascata > :nth-child(5) { animation-delay: 140ms; }
-.cascata > :nth-child(6) { animation-delay: 175ms; } .cascata > :nth-child(7) { animation-delay: 210ms; }
-.cascata > :nth-child(n+8) { animation-delay: 245ms; }
+/* Ao abrir qualquer tela, cada bloco entra 35ms depois do anterior (no máximo 8 degraus). O app.js tira a classe
+   .cascata depois de 600ms: redesenhos dentro da tela não repetem o efeito.
+   Telas com os blocos dentro de uma moldura (duas colunas, cartão do tanque, formulário): a moldura fica parada e o que
+   está dentro dela entra em cascata, começando um pouco depois (--b). */
+.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > * {
+  --d: 0ms; animation: tela-entra .24s var(--ease) both; animation-delay: calc(var(--b, 0ms) + var(--d));
+}
+.cascata > :is(.pc-duas, .tanque-card), .cascata > .pc-duas > *, .cascata > .pc-duas > * > .passos { animation: none; }
+.cascata > .pc-duas > * > *, .cascata .passos > * { --b: 70ms; }
+.cascata > .tanque-card ~ * { --b: 105ms; } /* a lista de baixo do tanque entra depois do cartão */
+:is(.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > *):nth-child(2) { --d: 35ms; }
+:is(.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > *):nth-child(3) { --d: 70ms; }
+:is(.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > *):nth-child(4) { --d: 105ms; }
+:is(.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > *):nth-child(5) { --d: 140ms; }
+:is(.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > *):nth-child(6) { --d: 175ms; }
+:is(.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > *):nth-child(7) { --d: 210ms; }
+:is(.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > *):nth-child(n+8) { --d: 245ms; }
 .hoje-tanques .tq:nth-child(2), .lista-grade > li:nth-child(2) { animation-delay: 30ms; }
 .hoje-tanques .tq:nth-child(3), .lista-grade > li:nth-child(3) { animation-delay: 60ms; }
 .hoje-tanques .tq:nth-child(4), .lista-grade > li:nth-child(4) { animation-delay: 90ms; }
@@ -802,7 +812,8 @@ body.sem-rolagem { overflow: hidden; }
   #toast.on .toast-visto path { animation: none; stroke-dashoffset: 0; }
   .dialogo, .dialogo-caixa, .sucesso-ic { animation: none; }
   /* com menos movimento: a tela nova só aparece, sem subir nem cascata */
-  .tela-entra, .painel-entra { animation: so-aparece .15s ease-out both; } .cascata > * { animation: so-aparece .15s ease-out both; }
+  .tela-entra, .painel-entra { animation: so-aparece .15s ease-out both; } .cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > * { animation: so-aparece .15s ease-out both; }
+  .cascata > :is(.pc-duas, .tanque-card), .cascata > .pc-duas > *, .cascata > .pc-duas > * > .passos { animation: none; }
   .hoje-tanques .tq, .lista-grade > li { animation: none; }
 }
 @media print {

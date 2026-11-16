@@ -528,9 +528,9 @@ async function rotear() {
   marcarAtalho(rota === 'relatorio' && partes[0] === 'racao' ? 'relatorio-racao' : rota);
   registrarRota(location.hash, rota, partes);
   const el = document.createElement('div'); // contêiner novo por rota: renderizações atrasadas não sujam a tela atual
-  el.className = 'tela-entra'; // troca de tela suave (css: .tela-entra)
-  // telas principais: os blocos entram em cascata, um logo depois do outro (css: .cascata)
-  if (['', 'relatorio', 'mais', 'fazenda', 'lucro'].includes(rota) && partes[0] !== 'racao') el.classList.add('cascata');
+  // ao abrir qualquer tela, os blocos entram em cascata, um logo depois do outro (css: .cascata).
+  // Só na abertura: depois a classe sai, e redesenhos dentro da tela (digitar, escolher) não repetem o efeito.
+  el.className = 'cascata';
   view.replaceChildren(...(ehAbaPrincipal(rota, partes) ? [] : [linhaVoltar(rota)]), el);
   const meu = ++tokenRota;
   window.scrollTo(0, 0);
@@ -558,6 +558,7 @@ async function rotear() {
   } catch (e) {
     if (meu === tokenRota) renderErro(el, e);
   }
+  setTimeout(() => el.classList.remove('cascata'), 600); // a cascata mais longa termina em ~490 ms
   atualizarLateral(ctx).catch(() => {}); // resumo do dia na lateral (computador)
 }
 
