@@ -786,7 +786,9 @@ body.sem-rolagem { overflow: hidden; }
 }
 .cascata > :is(.pc-duas, .tanque-card), .cascata > .pc-duas > *, .cascata > .pc-duas > * > .passos { animation: none; }
 .cascata > .pc-duas > * > *, .cascata .passos > * { --b: 70ms; }
-.cascata > .tanque-card ~ * { --b: 105ms; } /* a lista de baixo do tanque entra depois do cartão */
+.cascata > .tanque-card ~ * { --b: 105ms; }
+.cascata.troca-aba > :is(h1, .seg) { animation: none; } /* Lançar, troca de aba: o topo fica parado */
+.cascata.troca-aba > .pc-duas > * > *, .cascata.troca-aba .passos > * { --b: 0ms; } /* a lista de baixo do tanque entra depois do cartão */
 :is(.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > *):nth-child(2) { --d: 35ms; }
 :is(.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > *):nth-child(3) { --d: 70ms; }
 :is(.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > *):nth-child(4) { --d: 105ms; }

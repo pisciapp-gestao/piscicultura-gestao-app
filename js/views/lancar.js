@@ -125,12 +125,23 @@ function camposDoTipo(tipo, kgSaco, verDinheiro = false) {
     </ol></details>`;
 }
 
+// a aba escolhida fica à vista no celular estreito. Na troca de aba, a faixa parte de onde estava e desliza até ela.
+function centrarAba(sg, on, antes) {
+  const alvo = Math.max(0, on.offsetLeft - (sg.clientWidth - on.offsetWidth) / 2);
+  if (antes == null) { sg.scrollLeft = alvo; return; }
+  sg.scrollLeft = antes;
+  const suave = !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  requestAnimationFrame(() => sg.scrollTo({ left: alvo, behavior: suave ? 'smooth' : 'auto' }));
+}
+
 export async function renderLancar(ctx, el, params = {}) {
   const { state } = ctx;
   const tiposVisiveis = Object.entries(TIPOS).filter(([, v]) => !v.gerir || ctx.podeGerir());
   const tipo = tiposVisiveis.some(([k]) => k === params.tipo) ? params.tipo : 'racao';
   // trocou de aba (Ração → Biometria...): o formulário novo entra em cascata, como uma tela nova
-  if (params.de !== undefined && el.classList) { el.classList.add('cascata'); setTimeout(() => el.classList.remove('cascata'), 600); }
+  // trocou de aba (Ração → Biometria...): o título e as abas ficam parados (só o risquinho desliza);
+  // os balões do formulário entram em cascata (css: .troca-aba)
+  if (params.de !== undefined && el.classList) { el.classList.add('cascata', 'troca-aba'); setTimeout(() => el.classList.remove('cascata', 'troca-aba'), 600); }
   // de onde veio (ronda ou tela do tanque): depois de salvar, o "voltar" leva para lá
   const volta = params.volta === 'ronda' || params.volta === 't' ? params.volta : '';
   const { tanques, lotes } = state.ref;
@@ -143,13 +154,14 @@ export async function renderLancar(ctx, el, params = {}) {
 
   if (tipo === 'transferencia') {
     const segHtml = `<div class="seg" style="--n:${tiposVisiveis.length}" role="tablist">${tiposVisiveis.map(([k, v]) => `<button type="button" data-tipo="${k}" class="${k === tipo ? 'on' : ''}">${v.rotulo}</button>`).join('')}</div>`;
+    let primeira = true; // a tela da transferência se redesenha ao escolher tanques: o deslize das abas só na chegada
     const ligarSeg = () => {
       const sg = el.querySelector('.seg'), on = sg && sg.querySelector('button.on');
-      if (on && sg.scrollWidth > sg.clientWidth) sg.scrollLeft = on.offsetLeft - (sg.clientWidth - on.offsetWidth) / 2;
-      if (params.de !== undefined && sg && !sg.dataset.ligado) sg.dataset.de = params.de;
-      if (sg) sg.dataset.ligado = '1';
+      if (on && sg.scrollWidth > sg.clientWidth) centrarAba(sg, on, primeira ? params.rolagem : null);
+      if (primeira && params.de !== undefined && sg) sg.dataset.de = params.de;
+      primeira = false;
       el.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
-        if (b.dataset.tipo !== tipo) renderLancar(ctx, el, { tipo: b.dataset.tipo, tanque: params.tanque, de: tiposVisiveis.findIndex(([k]) => k === tipo), volta });
+        if (b.dataset.tipo !== tipo) renderLancar(ctx, el, { tipo: b.dataset.tipo, tanque: params.tanque, de: tiposVisiveis.findIndex(([k]) => k === tipo), volta, rolagem: el.querySelector('.seg').scrollLeft });
       }));
     };
     return renderTransferir(ctx, el, { tanque: params.tanque, segHtml, ligarSeg });
@@ -201,10 +213,10 @@ export async function renderLancar(ctx, el, params = {}) {
     <aside class="lc-painel" id="painel-tq" aria-label="Resumo do tanque escolhido"></aside></div>`;
 
   // com 5 abas no celular estreito, a aba escolhida fica à vista
-  { const sg = el.querySelector('.seg'), on = sg && sg.querySelector('button.on'); if (on && sg.scrollWidth > sg.clientWidth) sg.scrollLeft = on.offsetLeft - (sg.clientWidth - on.offsetWidth) / 2; }
+  { const sg = el.querySelector('.seg'), on = sg && sg.querySelector('button.on'); if (on && sg.scrollWidth > sg.clientWidth) centrarAba(sg, on, params.rolagem); }
   if (params.de !== undefined) { const sg = el.querySelector('.seg'); if (sg) sg.dataset.de = params.de; }
   el.querySelectorAll('.seg button').forEach((b) =>
-    b.addEventListener('click', () => renderLancar(ctx, el, { tipo: b.dataset.tipo, tanque: el.querySelector('#tanque').value, de: tiposVisiveis.findIndex(([k]) => k === tipo), volta })));
+    b.addEventListener('click', () => renderLancar(ctx, el, { tipo: b.dataset.tipo, tanque: el.querySelector('#tanque').value, de: tiposVisiveis.findIndex(([k]) => k === tipo), volta, rolagem: el.querySelector('.seg').scrollLeft })));
 
   const f = el.querySelector('#f');
   let rascunhoSalvo = false, timerRascunho = null;
