@@ -1,6 +1,6 @@
 // Cálculos do relatório de um lote (puros, testáveis em Node)
 import { diasEntre, fmtInt, fmtNum, pesoMedioTxt } from './util.js';
-import { AGUA_TAMBAQUI as AG, SOCIL, SOCIL_PEIXES } from './config.js';
+import { AGUA_TAMBAQUI as AG, TABELA_ALIMENTAR, TABELA_PEIXES } from './config.js';
 
 const soma = (arr, k) => arr.reduce((s, x) => s + Number(x[k] || 0), 0);
 
@@ -487,24 +487,24 @@ export function custoAlevinoComTransf(lotes, custoDe, transfs) {
   return out;
 }
 
-// ----- ração pela tabela Socil (pedido do cliente piloto, 16/11/2026) -----
+// ----- ração pela tabela de alimentação (pedido do cliente piloto, 16/11/2026) -----
 // Ração que UM peixe come pela tabela para ir de pmIni a pmFim (kg). Em cada semana da tabela, a ração por grama
 // ganho é a da semana (kg na semana ÷ 40.000 peixes ÷ gramas ganhos). Acima de 3,6 kg segue o ritmo da última semana.
-export function racaoTabelaPorPeixe(pmIniKg, pmFimKg, tabela = SOCIL) {
+export function racaoTabelaPorPeixe(pmIniKg, pmFimKg, tabela = TABELA_ALIMENTAR) {
   const a = Number(pmIniKg) * 1000, b = Number(pmFimKg) * 1000;
   if (!(a >= 0) || !(b > a)) return 0;
   let kg = 0;
   for (const [, pi, pf, , , , semanaKg] of tabela) {
     const lo = Math.max(a, pi), hi = Math.min(b, pf);
-    if (hi > lo) kg += (semanaKg / SOCIL_PEIXES) * ((hi - lo) / (pf - pi));
+    if (hi > lo) kg += (semanaKg / TABELA_PEIXES) * ((hi - lo) / (pf - pi));
   }
   const ult = tabela[tabela.length - 1];
-  if (b > ult[2]) kg += (ult[6] / SOCIL_PEIXES / (ult[2] - ult[1])) * (b - Math.max(a, ult[2]));
+  if (b > ult[2]) kg += (ult[6] / TABELA_PEIXES / (ult[2] - ult[1])) * (b - Math.max(a, ult[2]));
   return kg;
 }
 
 // Linha da tabela para o peso médio atual: qual ração dar e quantas vezes por dia
-export function racaoCertaAgora(pmKg, tabela = SOCIL) {
+export function racaoCertaAgora(pmKg, tabela = TABELA_ALIMENTAR) {
   if (!(pmKg > 0)) return null;
   const g = pmKg * 1000;
   const l = tabela.find(([, , pf]) => g <= pf) || tabela[tabela.length - 1];
