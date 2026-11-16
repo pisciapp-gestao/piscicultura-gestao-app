@@ -107,7 +107,8 @@ export function ocupado(texto = 'Aguarde…') {
 
 // Janela que pede um texto (ex.: nome do tanque). Devolve o texto ou null se cancelar.
 // validar(valor) devolve a mensagem de erro (ou '' se estiver certo); o erro aparece na própria janela.
-export function pedirTexto({ titulo, texto = '', rotulo = '', placeholder = '', ok = 'Salvar', cancelar = 'Cancelar', maxlength = 60, validar = null }) {
+// valor: o que já vem escrito no campo; vazioOk: aceitar o campo vazio (devolve '').
+export function pedirTexto({ titulo, texto = '', rotulo = '', placeholder = '', ok = 'Salvar', cancelar = 'Cancelar', maxlength = 60, validar = null, valor = '', vazioOk = false }) {
   return new Promise((resolve) => {
     const fundo = document.createElement('div');
     fundo.className = 'dialogo com-campo';
@@ -118,7 +119,7 @@ export function pedirTexto({ titulo, texto = '', rotulo = '', placeholder = '', 
         <h3>${esc(titulo)}</h3>
         ${texto ? `<p>${esc(texto)}</p>` : ''}
         <label class="dialogo-campo">${esc(rotulo)}
-          <input type="text" maxlength="${maxlength}" placeholder="${esc(placeholder)}" autocomplete="off" enterkeyhint="done"></label>
+          <input type="text" maxlength="${maxlength}" placeholder="${esc(placeholder)}" value="${esc(valor)}" autocomplete="off" enterkeyhint="done"></label>
         <p class="erro" hidden></p>
         <div class="dialogo-acoes">
           <button type="submit" class="btn primario">${esc(ok)}</button>
@@ -135,7 +136,7 @@ export function pedirTexto({ titulo, texto = '', rotulo = '', placeholder = '', 
     fundo.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault();
       const v = campo.value.trim().replace(/\s+/g, ' ');
-      const msg = !v ? 'Escreva um nome.' : validar ? validar(v) : '';
+      const msg = !v && !vazioOk ? 'Escreva um nome.' : validar ? validar(v) : '';
       if (msg) { erro.textContent = msg; erro.hidden = false; campo.focus(); return; }
       fechar(v);
     });

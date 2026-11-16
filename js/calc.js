@@ -1,6 +1,6 @@
 // Cálculos do relatório de um lote (puros, testáveis em Node)
 import { diasEntre, fmtInt, fmtNum, pesoMedioTxt } from './util.js';
-import { AGUA_TAMBAQUI as AG } from './config.js';
+import { AGUA_TAMBAQUI as AG, SOCIL, SOCIL_PEIXES } from './config.js';
 
 const soma = (arr, k) => arr.reduce((s, x) => s + Number(x[k] || 0), 0);
 
@@ -485,4 +485,50 @@ export function custoAlevinoComTransf(lotes, custoDe, transfs) {
     out[l.id] = Math.max(0, b - saiu);
   }
   return out;
+}
+
+// ----- ração pela tabela Socil (pedido do cliente piloto, 16/11/2026) -----
+// Ração que UM peixe come pela tabela para ir de pmIni a pmFim (kg). Em cada semana da tabela, a ração por grama
+// ganho é a da semana (kg na semana ÷ 40.000 peixes ÷ gramas ganhos). Acima de 3,6 kg segue o ritmo da última semana.
+export function racaoTabelaPorPeixe(pmIniKg, pmFimKg, tabela = SOCIL) {
+  const a = Number(pmIniKg) * 1000, b = Number(pmFimKg) * 1000;
+  if (!(a >= 0) || !(b > a)) return 0;
+  let kg = 0;
+  for (const [, pi, pf, , , , semanaKg] of tabela) {
+    const lo = Math.max(a, pi), hi = Math.min(b, pf);
+    if (hi > lo) kg += (semanaKg / SOCIL_PEIXES) * ((hi - lo) / (pf - pi));
+  }
+  const ult = tabela[tabela.length - 1];
+  if (b > ult[2]) kg += (ult[6] / SOCIL_PEIXES / (ult[2] - ult[1])) * (b - Math.max(a, ult[2]));
+  return kg;
+}
+
+// Linha da tabela para o peso médio atual: qual ração dar e quantas vezes por dia
+export function racaoCertaAgora(pmKg, tabela = SOCIL) {
+  if (!(pmKg > 0)) return null;
+  const g = pmKg * 1000;
+  const l = tabela.find(([, , pf]) => g <= pf) || tabela[tabela.length - 1];
+  return { racao: l[4], tratos: l[5], pct: l[3], semana: l[0] };
+}
+
+// Quanto falta de ração até o peso de venda (ou de passar de fase).
+// Pela tabela, para os peixes vivos, ajustada pelo que este lote gastou de verdade em relação à tabela até agora
+// (fator: 1,25 = gastou 25% a mais que a tabela; só com crescimento medido, entre 0,7 e 2).
+// lote, r: linha do resumo_lotes; alvoKg: peso de venda; racaoRealKg: ração dada neste lote.
+export function previsaoRacao(lote, r, alvoKg) {
+  const qi = Number(lote.quantidade_inicial) || 0;
+  const pmIni = qi > 0 ? Number(lote.peso_inicial_kg) / qi : null;
+  const pm = r && r.ultimo_peso_medio_kg != null ? Number(r.ultimo_peso_medio_kg) : pmIni;
+  if (!(pm > 0) || !(alvoKg > 0)) return null;
+  const vivos = vivosDoLote(lote, r);
+  const agora = racaoCertaAgora(pm);
+  if (pm >= alvoKg || !(vivos > 0)) return { pronto: pm >= alvoKg, faltaKg: 0, tabelaKg: 0, fator: null, agora, vivos, pmKg: pm, alvoKg };
+  const tabelaKg = racaoTabelaPorPeixe(pm, alvoKg) * vivos;
+  let fator = null;
+  const real = Number(r && r.racao_kg) || 0;
+  if (pmIni > 0 && pm > pmIni * 1.2 && real > 0) {
+    const esperado = racaoTabelaPorPeixe(pmIni, pm) * ((qi + vivos) / 2); // média dos peixes no período
+    if (esperado > 0) fator = Math.min(2, Math.max(0.7, real / esperado));
+  }
+  return { pronto: false, faltaKg: tabelaKg * (fator || 1), tabelaKg, fator, agora, vivos, pmKg: pm, alvoKg };
 }

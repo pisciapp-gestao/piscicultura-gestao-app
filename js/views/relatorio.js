@@ -10,7 +10,8 @@ import { icone } from '../icons.js';
 import { esc, fmtData, fmtNum, fmtInt, fmtBRL, hojeISO, num, ROTULO_TIPO, faseCss, nomeArquivo, dataArquivo, progresso, fmtPct, numDecimal, numMoeda, moedaCampo, pesoMedioTxt, celulaCsv } from '../util.js';
 import { pizza, COR_FASE, ORDEM_FASE } from '../graficos.js';
 import { calcularNaIdade, fimDoLote, mediaDe, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui } from '../calc.js';
-import { calcularLote, precoMedioKg, precoRacaoDoLote, pontosPeso, pesoMedioKg, evolucaoPeso, racaoPorSemana, matrizRacao, situacaoEstoque } from '../calc.js';
+import { calcularLote, precoMedioKg, precoRacaoDoLote, pontosPeso, pesoMedioKg, evolucaoPeso, racaoPorSemana, matrizRacao, situacaoEstoque, previsaoRacao } from '../calc.js';
+import { metaDe, metasDe, htmlPrevRacao, PROXIMA_FASE } from './despesca.js';
 
 export function svgPeso(pts, { un = 'g', dec = 0, vazio = 'O gráfico aparece a partir da primeira biometria.', rotulo = 'Evolução do peso médio' } = {}) {
   if (pts.length < 2) return `<p class="mudo">${vazio}</p>`;
@@ -257,6 +258,18 @@ export async function renderRelatorioLote(ctx, el, id) {
   // ?aba=registros: atalho "Lançou errado?" da tela do tanque abre direto a lista de lançamentos
   let aba = /[?&]aba=registros(&|$)/.test(location.hash) ? 'registros' : 'resumo';
 
+  // ração que falta até vender (ou passar de fase), pela tabela Socil, e a ração certa agora (só lote ativo)
+  const blocoRacaoAteVender = () => {
+    if (!lote.ativo) return '';
+    const r = { ultimo_peso_medio_kg: c.pmAtualG != null ? c.pmAtualG / 1000 : null, racao_kg: c.racaoTotal, mortos: c.mortos, despescados: c.despescados, transferidos: c.transferidos };
+    const alvo = metaDe(lote, metasDe(ctx.state.ref, {}));
+    const pr = previsaoRacao(lote, r, alvo);
+    if (!pr) return '';
+    return `<section class="bloco"><h2>Ração até ${PROXIMA_FASE[lote.tipo] ? 'passar de fase' : 'vender'}</h2>
+      <div class="card td-prev"><p class="mudo" style="margin:0">${PROXIMA_FASE[lote.tipo] ? 'Meta da fase' : 'Peso de venda'}: <b>${pr.alvoKg < 1 ? `${fmtNum(pr.alvoKg * 1000, 0)} g` : `${fmtNum(pr.alvoKg, 1)} kg`}</b> · agora ${pr.pmKg < 1 ? `${fmtNum(pr.pmKg * 1000, 0)} g` : `${fmtNum(pr.pmKg, 2)} kg`}</p>
+      ${pr.pronto ? `<p class="mudo" style="margin:.6rem 0 0"><b>Já está no peso.</b></p>` : ''}${htmlPrevRacao(pr, kgS, lote.tipo)}</div></section>`;
+  };
+
   // transferências: de onde vieram e para onde foram os peixes, com o custo de ração que foi junto
   const blocoTransf = () => {
     if (!transf.length) return '';
@@ -297,6 +310,7 @@ export async function renderRelatorioLote(ctx, el, id) {
       <p class="mudo nota">Valores estimados usam o peso médio da última biometria e a mortalidade registrada. Quanto mais biometrias, mais confiável.</p>
     </section>
     ${blocoTransf()}
+    ${blocoRacaoAteVender()}
     <section class="bloco" id="cmp-ciclos"><h2>Comparação com ciclos anteriores</h2>${cmpHtml || '<div class="card"><p class="mudo" style="margin:0">Buscando os ciclos anteriores…</p></div>'}</section>`;
 
   const painelPeso = () => {
