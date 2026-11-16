@@ -20,8 +20,10 @@ const MENSAGEM = {
 const NOME_RACAO = { engorda: 'ração de engorda', alevino: 'ração de alevino' };
 let tipoAtual = 'engorda';
 
-export async function renderEstoque(ctx, el) {
-  el.innerHTML = '<h1>Estoque de ração</h1><p class="carregando">Carregando…</p>';
+// troca: {de} quando trocou de aba (Engorda ↔ Alevino): a tela antiga fica até a nova chegar, o título e as abas
+// ficam parados (o risquinho desliza) e só os balões de baixo entram em cascata
+export async function renderEstoque(ctx, el, troca = null) {
+  if (!troca) el.innerHTML = '<h1>Estoque de ração</h1><p class="carregando">Carregando…</p>';
   const gerir = ctx.podeGerir();
   const din = ctx.verDinheiro(); // valor pago: só o dono vê e informa
   const kgS = ctx.state.ref.kgSaco || PESO_SACO_PADRAO_KG;
@@ -60,6 +62,7 @@ export async function renderEstoque(ctx, el) {
   const totSaidas = Math.abs(extrato.filter((x) => x.kg < 0).reduce((t, x) => t + x.kg, 0)); // abs: evita "-0" quando não houve saída
   const sinal = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${sc(Math.abs(v))}`;
 
+  if (troca) { el.classList.add('cascata', 'troca-aba'); setTimeout(() => el.classList.remove('cascata', 'troca-aba'), 600); }
   el.innerHTML = `
     <h1>Estoque de ração</h1>
     ${porTipo ? `<div class="seg" style="--n:2" role="tablist">${Object.entries(NOME_RACAO).map(([k]) => `<button type="button" data-tipo-racao="${k}" class="${k === tipoAtual ? 'on' : ''}">${k === 'engorda' ? 'Engorda' : 'Alevino'} <small>${((v) => `${sc(Math.max(0, v), 0)} ${Math.max(0, v / kgS) === 1 ? 'saco' : 'sacos'}`)(Number((saldos.linhas.find((x) => x.tipo_racao === k) || {}).saldo_kg || 0))}</small></button>`).join('')}</div>` : ''}
@@ -165,8 +168,10 @@ export async function renderEstoque(ctx, el) {
 
   el.querySelectorAll('[data-tipo-racao]').forEach((b) => b.addEventListener('click', () => {
     if (b.dataset.tipoRacao === tipoAtual) return;
-    tipoAtual = b.dataset.tipoRacao; renderEstoque(ctx, el);
+    const de = [...el.querySelectorAll('[data-tipo-racao]')].findIndex((x) => x.dataset.tipoRacao === tipoAtual);
+    tipoAtual = b.dataset.tipoRacao; renderEstoque(ctx, el, { de });
   }));
+  if (troca) { const sg = el.querySelector('.seg'); if (sg) sg.dataset.de = troca.de; } // o risquinho sai da aba antiga
   if (!gerir) return;
 
   // ---- contagem física ----

@@ -397,10 +397,13 @@ export async function renderRelatorioLote(ctx, el, id) {
     </div>`;
 
   const painel = el.querySelector('#painel');
+  let jaPintou = false;
   function pintar() {
     el.querySelectorAll('.seg button').forEach((b) => b.classList.toggle('on', b.dataset.aba === aba));
     painel.innerHTML = paineis[aba]();
-    painel.classList.remove('painel-entra'); void painel.offsetWidth; painel.classList.add('painel-entra'); // troca de aba suave
+    // troca de aba (Resumo → Peso...): as abas ficam paradas e os balões do painel entram em cascata (a 1ª vez é a cascata da tela)
+    if (jaPintou) { clearTimeout(painel._fimCascata); painel.classList.add('cascata'); painel._fimCascata = setTimeout(() => painel.classList.remove('cascata'), 600); }
+    jaPintou = true;
     painel.querySelectorAll('.tf-desfazer').forEach((b) =>
       b.addEventListener('click', async () => {
         if (!navigator.onLine) return ctx.toast('Sem internet: desfazer a transferência precisa de conexão', 'erro');
