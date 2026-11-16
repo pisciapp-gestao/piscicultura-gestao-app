@@ -2,8 +2,37 @@
 import { esc, fmtInt, fmtNum, progresso } from '../util.js';
 import { ALVO_PADRAO_KG } from '../config.js';
 
-// meta de despesca de um lote: a guardada no aparelho ou o padrão da fase
+// meta de despesca de um lote: a do mapa (metasDe) ou o padrão da fase
 export const metaDe = (l, metas) => Number((metas || {})[l.id]) || ALVO_PADRAO_KG[l.tipo] || ALVO_PADRAO_KG.engorda;
+
+// Peso de venda (sql/38): engorda usa o do tanque, senão o da fazenda, senão a meta antiga guardada no aparelho.
+// As outras fases continuam com a meta de passar de fase (aparelho ou padrão). ref: state.ref; local: metas do aparelho.
+export function metasDe(ref, local = {}) {
+  const out = { ...(local || {}) };
+  for (const l of (ref && ref.lotes) || []) {
+    if (l.tipo !== 'engorda') continue;
+    const t = (ref.tanques || []).find((x) => x.id === l.tanque_id);
+    const v = (t && Number(t.peso_venda_kg) > 0 && Number(t.peso_venda_kg)) || (Number(ref.pesoVenda) > 0 && Number(ref.pesoVenda)) || null;
+    if (v) out[l.id] = v;
+  }
+  return out;
+}
+// de onde vem o peso de venda do tanque (para o texto da tela)
+export const origemPesoVenda = (tanque, ref) => (tanque && Number(tanque.peso_venda_kg) > 0 ? 'tanque' : ref && Number(ref.pesoVenda) > 0 ? 'fazenda' : 'padrao');
+
+// "Faltam ≈ 1.180 sacos de ração até vender" + a ração certa agora (tabela Socil)
+export function htmlPrevRacao(pr, kgSaco, tipo = 'engorda') {
+  if (!pr) return '';
+  const sacos = (kg) => fmtInt(Math.round(kg / kgSaco));
+  const ate = PROXIMA_FASE[tipo] ? 'até passar de fase' : 'até vender';
+  const dif = pr.fator ? Math.round(Math.abs(pr.fator - 1) * 100) : 0;
+  const falta = pr.pronto ? '' : `<div class="ra-tile ra-falta"><span>Faltam ${ate}</span><b>${sacos(pr.faltaKg)}<em>sacos</em></b>
+    <small>${dif >= 1 ? `Tabela Socil: ${sacos(pr.tabelaKg)}. Este lote gasta ${fmtInt(dif)}% ${pr.fator > 1 ? 'a mais' : 'a menos'}` : 'Pela tabela Socil'}</small></div>`;
+  const [nome, grao] = pr.agora ? String(pr.agora.racao).split(' · ') : [];
+  const agora = pr.agora ? `<div class="ra-tile ra-agora"><span>Ração agora</span><b>${esc(nome)}</b>
+    <small>${grao ? `${esc(grao)} · ` : ''}${fmtInt(pr.agora.tratos)} ${pr.agora.tratos === 1 ? 'trato' : 'tratos'}/dia · ${fmtNum(pr.agora.pct, 1)}% do peso</small></div>` : '';
+  return `<div class="ra-grade${falta && agora ? '' : ' ra-uma'}">${falta}${agora}</div>`;
+}
 export const pesoTxt = (kg) => (kg < 1 ? `${fmtNum(kg * 1000, 0)} g` : `${fmtNum(kg, kg < 10 ? 1 : 0)} kg`);
 export const dataCurta = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).replace('.', '');
 

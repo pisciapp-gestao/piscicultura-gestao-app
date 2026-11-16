@@ -1463,3 +1463,16 @@ a.acao:active, .rl-tq:active { transform: scale(.98); }
 
 /* balão fechando (js/sanfona.js): a setinha volta a apontar para baixo já no começo do recolhimento */
 details.fechando[open] > summary::after { transform: rotate(45deg) translateY(-2px); }
+
+/* ração até vender, na tela do tanque e no relatório (tabela Socil, 16/11/2026): dois quadrinhos de destaque */
+.ra-grade { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-top: .85rem; }
+.ra-grade.ra-uma { grid-template-columns: 1fr; }
+.ra-tile { border-radius: 14px; padding: .75rem .8rem .8rem; display: grid; gap: .15rem; align-content: start; min-width: 0; background: var(--campo-bg); }
+.ra-falta { background: color-mix(in srgb, var(--rio) 11%, var(--card)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rio) 22%, transparent); }
+.ra-tile > span { font-size: .8rem; color: var(--tinta-2); font-weight: 500; }
+.ra-tile > b { font-family: var(--fonte-titulo); font-size: 1.55rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; color: var(--tinta); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.ra-falta > b { color: var(--rio); }
+.ra-tile > b em { font-family: var(--fonte); font-style: normal; font-size: .85rem; font-weight: 500; color: var(--tinta-2); margin-left: .25rem; letter-spacing: 0; }
+.ra-agora { background: var(--card); box-shadow: inset 0 0 0 1px var(--linha); }
+.ra-agora > b { font-size: 1.25rem; padding-top: .15rem; }
+.ra-tile > small { font-size: .78rem; color: var(--tinta-2); line-height: 1.35; }
