@@ -103,19 +103,15 @@ function camposDoTipo(tipo, kgSaco, verDinheiro = false) {
         <input id="desp-qtd" class="grande" type="text" inputmode="numeric" autocomplete="off" placeholder="0" required></label>
       <label>Peso total bruto (kg)
         <input id="desp-bruto" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex.: 9547" required></label>
-      <div class="man-dose desp-liq">
-        <label>Desconto (%) <small class="mudo">(opcional)</small>
-          <input id="desp-desc" type="text" inputmode="decimal" autocomplete="off" maxlength="5" placeholder="Ex.: 2"></label>
-        <label>Peso total líquido (kg) <small class="mudo">(opcional)</small>
-          <input id="desp-liquido" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex.: 9356"></label>
-      </div>
-      <p class="mudo pequeno" id="desp-desc-ajuda">Informe o desconto (ex.: 2%) e o peso líquido é preenchido sozinho.</p>
-      ${verDinheiro ? `<div class="man-dose desp-venda">
-        <label>Preço de venda por kg <small class="mudo">(opcional)</small>
-          <span class="com-prefixo"><em>R$</em><input id="desp-preco" type="text" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="0,00"></span></label>
-        <label>Comprador <small class="mudo">(opcional)</small>
-          <input id="desp-comprador" type="text" maxlength="80" autocomplete="off"></label>
-      </div>` : ''}
+      <label class="desp-desc"><span class="rot">Desconto do peso bruto <small class="opc">opcional</small></span>
+        <span class="com-sufixo"><input id="desp-desc" type="text" inputmode="decimal" autocomplete="off" maxlength="5" placeholder="Ex.: 2"><em>%</em></span>
+        <small class="mudo" id="desp-desc-ajuda">O peso líquido é preenchido sozinho.</small></label>
+      <label><span class="rot">Peso total líquido (kg) <small class="opc">opcional</small></span>
+        <input id="desp-liquido" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex.: 9356"></label>
+      ${verDinheiro ? `<label><span class="rot">Preço de venda por kg <small class="opc">opcional</small></span>
+        <span class="com-prefixo"><em>R$</em><input id="desp-preco" type="text" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="0,00"></span></label>
+      <label><span class="rot">Comprador <small class="opc">opcional</small></span>
+        <input id="desp-comprador" type="text" maxlength="80" autocomplete="off"></label>` : ''}
       <div class="calc resultado" id="desp-calc" hidden></div>`;
   }
   return `<label>Quantos peixes morreram?
@@ -461,10 +457,11 @@ export async function renderLancar(ctx, el, params = {}) {
       if (!String(descEl.value).trim() || !(d > 0 && d < 50) || !(b > 0) || (brutoEl.value.includes('.') && brutoEl.value.includes(','))) return;
       const lq = Math.round(b * (1 - d / 100) * 10) / 10;
       liqEl.value = String(lq).replace('.', ',');
+      const aj = f.querySelector('#desp-desc-ajuda'); if (aj) aj.textContent = `${fmtNum(b, b % 1 ? 1 : 0)} kg − ${String(d).replace('.', ',')}% = ${fmtNum(lq, lq % 1 ? 1 : 0)} kg de peso líquido.`;
     };
     descEl.addEventListener('input', () => { aplicarDesconto(); contas(); });
     brutoEl.addEventListener('input', aplicarDesconto);
-    liqEl.addEventListener('input', () => { descEl.value = ''; }); // líquido digitado à mão: vale o que foi digitado
+    liqEl.addEventListener('input', () => { descEl.value = ''; const aj = f.querySelector('#desp-desc-ajuda'); if (aj) aj.textContent = 'O peso líquido é preenchido sozinho.'; }); // líquido digitado à mão: vale o que foi digitado
     ['#desp-qtd', '#desp-bruto', '#desp-liquido', '#desp-preco'].forEach((s) => { const c = f.querySelector(s); if (c) c.addEventListener('input', contas); });
     selTanque.addEventListener('change', contas);
     pintarDica();

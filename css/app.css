@@ -1121,13 +1121,15 @@ table.cmp td b { font-weight: 600; }
 .tq-ultimo { display: block; margin-top: .2rem; font-size: .82rem; font-weight: 500; color: var(--alerta); }
 .tile .tile-fase { display: block; font-size: .75rem; font-weight: 400; color: var(--tinta-2); margin-top: .1rem; }
 /* Lançar com 5 abas: rolam de lado se não couberem, em vez de cortar o nome */
-.seg[style*="--n:5"], .seg[style*="--n:6"] { display: flex; gap: 1rem; overflow-x: auto; scrollbar-width: none; }
+.seg[style*="--n:5"], .seg[style*="--n:6"] { display: flex; gap: 1rem; overflow-x: auto; overflow-y: hidden; overscroll-behavior: contain; touch-action: pan-x; scrollbar-width: none; } /* só desliza para o lado: no iPhone dava para arrastar as abas para baixo */
 .seg[style*="--n:5"]::-webkit-scrollbar, .seg[style*="--n:6"]::-webkit-scrollbar { display: none; }
 .seg[style*="--n:5"] > button, .seg[style*="--n:6"] > button { flex: 1 0 auto; font-size: .86rem; padding-inline: .1rem; }
 /* manejo: na ração ou na água lado a lado; dose e unidade na mesma linha */
 #man-via { grid-template-columns: 1fr 1fr; }
 .man-dose { display: grid; grid-template-columns: 1fr 6.5rem; gap: .6rem; }
-.man-dose.desp-liq { grid-template-columns: 7rem 1fr; } /* despesca: desconto (%) curto + peso líquido */
+.rot { display: flex; align-items: baseline; gap: .45rem; flex-wrap: wrap; }
+.opc { font-size: .78rem; font-weight: 400; color: var(--mudo-claro); } /* "opcional" na mesma linha do título */
+.desp-desc .com-sufixo { max-width: 9rem; }
 
 /* água: medições em duas colunas */
 .agua-campos { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; align-items: end; }
