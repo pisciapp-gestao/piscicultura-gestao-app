@@ -45,7 +45,7 @@ with sync_playwright() as pw:
 
     preparar('dono'); pg = abrir_em(b, 320); form(pg)
     n = pg.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth + 1")
-    checa(not n and pg.locator('.seg button').count() == 6, '320 px: 6 abas sem transbordar a página')
+    checa(not n and pg.locator('.seg button').count() == 7, '320 px: 7 abas (com Transferência) sem transbordar a página')
     corta = pg.evaluate("[...document.querySelectorAll('.seg button')].some(b => b.scrollWidth > b.clientWidth + 1)")
     checa(not corta, '320 px: nenhum nome de aba cortado')
     r = pg.evaluate("(() => { const b = document.querySelector('.seg button.on').getBoundingClientRect(); return [b.left, b.right, innerWidth]; })()")
