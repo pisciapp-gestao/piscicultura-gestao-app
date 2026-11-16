@@ -8,6 +8,7 @@ import { confirmar } from '../dialogo.js';
 import { ligarTeclado } from '../teclado.js';
 import { desfazerLancamento, minutosParaDesfazer } from '../desfazer.js';
 import { ordemNatural } from './home.js';
+import { renderTransferir } from './transferir.js';
 import { AGUA_LIMITES, PESO_SACO_PADRAO_KG, CAUSAS_MORTE, TAXA_RACAO } from '../config.js';
 import { sugestaoRacao, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui, tipoRacaoDoLote, faltaNoEstoque } from '../calc.js';
 
@@ -16,6 +17,7 @@ const TIPOS = {
   biometria: { rotulo: 'Biometria', tabela: 'biometrias' },
   mortalidade: { rotulo: 'Mortalidade', tabela: 'mortalidade' },
   despesca: { rotulo: 'Despesca', tabela: 'despescas', gerir: true }, // peso total da fazenda: só dono e gerente
+  transferencia: { rotulo: 'Transferência', tabela: 'transferencias', gerir: true }, // peixes de um tanque para outro (sql/37): tela própria
   manejo: { rotulo: 'Manejo', tabela: 'manejos' },
   agua: { rotulo: 'Água', tabela: 'qualidade_agua' },
 };
@@ -137,6 +139,19 @@ export async function renderLancar(ctx, el, params = {}) {
     return;
   }
 
+  if (tipo === 'transferencia') {
+    const segHtml = `<div class="seg" style="--n:${tiposVisiveis.length}" role="tablist">${tiposVisiveis.map(([k, v]) => `<button type="button" data-tipo="${k}" class="${k === tipo ? 'on' : ''}">${v.rotulo}</button>`).join('')}</div>`;
+    const ligarSeg = () => {
+      const sg = el.querySelector('.seg'), on = sg && sg.querySelector('button.on');
+      if (on && sg.scrollWidth > sg.clientWidth) sg.scrollLeft = on.offsetLeft - (sg.clientWidth - on.offsetWidth) / 2;
+      if (params.de !== undefined && sg && !sg.dataset.ligado) sg.dataset.de = params.de;
+      if (sg) sg.dataset.ligado = '1';
+      el.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
+        if (b.dataset.tipo !== tipo) renderLancar(ctx, el, { tipo: b.dataset.tipo, tanque: params.tanque, de: tiposVisiveis.findIndex(([k]) => k === tipo), volta });
+      }));
+    };
+    return renderTransferir(ctx, el, { tanque: params.tanque, segHtml, ligarSeg });
+  }
   const ultimo = (await db.kvGet('ultimoTanque')) || '';
   const tanqueInicial = tanques.some((t) => t.id === params.tanque) ? params.tanque : (tanques.some((t) => t.id === ultimo) ? ultimo : tanques[0].id);
   const hoje = hojeISO();
@@ -388,7 +403,7 @@ export async function renderLancar(ctx, el, params = {}) {
     selLote.addEventListener('change', atualizaPm);
     selTanque.addEventListener('change', atualizaPm);
     if (navigator.onLine) {
-      ctx.api.resumoLotes().then((r) => { mortos = Object.fromEntries(r.map((x) => [x.lote_id, Number(x.mortos) + Number(x.despescados || 0)])); atualizaPm(); }).catch(() => {});
+      ctx.api.resumoLotes().then((r) => { mortos = Object.fromEntries(r.map((x) => [x.lote_id, Number(x.mortos) + Number(x.despescados || 0) + Number(x.transferidos || 0)])); atualizaPm(); }).catch(() => {});
     }
   }
 

@@ -39,7 +39,7 @@ with sync_playwright() as pw:
 
     preparar('dono'); pg = abrir_em(b, 320); form(pg)
     r = pg.evaluate("(() => { const b = document.querySelector('.seg button.on').getBoundingClientRect(); return [b.left, b.right, innerWidth, document.documentElement.scrollWidth > innerWidth + 1, document.querySelectorAll('.seg button').length]; })()")
-    checa(r[0] >= 0 and r[1] <= r[2] and not r[3] and r[4] == 6, f'320 px: 6 abas, aba Água à vista, sem transbordar {r}')
+    checa(r[0] >= 0 and r[1] <= r[2] and not r[3] and r[4] == 7, f'320 px: 7 abas (com Transferência), aba Água à vista, sem transbordar {r}')
     pg.screenshot(path='agua_320.png', full_page=True)
     def tenta(campos):
         for s in ['#ag-od', '#ag-temp', '#ag-ph', '#ag-am']: pg.fill(s, campos.get(s, ''))
