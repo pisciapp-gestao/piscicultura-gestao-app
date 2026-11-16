@@ -258,7 +258,7 @@ export async function renderRelatorioLote(ctx, el, id) {
   // ?aba=registros: atalho "Lançou errado?" da tela do tanque abre direto a lista de lançamentos
   let aba = /[?&]aba=registros(&|$)/.test(location.hash) ? 'registros' : 'resumo';
 
-  // ração que falta até vender (ou passar de fase), pela tabela Socil, e a ração certa agora (só lote ativo)
+  // ração que falta até vender (ou passar de fase), pela tabela de alimentação, e a ração certa agora (só lote ativo)
   const blocoRacaoAteVender = () => {
     if (!lote.ativo) return '';
     const r = { ultimo_peso_medio_kg: c.pmAtualG != null ? c.pmAtualG / 1000 : null, racao_kg: c.racaoTotal, mortos: c.mortos, despescados: c.despescados, transferidos: c.transferidos };

@@ -1464,7 +1464,7 @@ a.acao:active, .rl-tq:active { transform: scale(.98); }
 /* balão fechando (js/sanfona.js): a setinha volta a apontar para baixo já no começo do recolhimento */
 details.fechando[open] > summary::after { transform: rotate(45deg) translateY(-2px); }
 
-/* ração até vender, na tela do tanque e no relatório (tabela Socil, 16/11/2026): dois quadrinhos de destaque */
+/* ração até vender, na tela do tanque e no relatório (tabela de alimentação, 16/11/2026): dois quadrinhos de destaque */
 .ra-grade { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-top: .85rem; }
 .ra-grade.ra-uma { grid-template-columns: 1fr; }
 .ra-tile { border-radius: 14px; padding: .75rem .8rem .8rem; display: grid; gap: .15rem; align-content: start; min-width: 0; background: var(--campo-bg); }
