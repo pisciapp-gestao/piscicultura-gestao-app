@@ -1460,3 +1460,6 @@ a.acao:active, .rl-tq:active { transform: scale(.98); }
 .tf-lin .tf-data { font-size: .78rem; margin-bottom: .1rem; }
 .tf-lin-c + .tf-lin-c { margin-top: .4rem; }
 .tf-desfazer { margin-top: .35rem; font-size: .84rem; padding: 0; }
+
+/* balão fechando (js/sanfona.js): a setinha volta a apontar para baixo já no começo do recolhimento */
+details.fechando[open] > summary::after { transform: rotate(45deg) translateY(-2px); }

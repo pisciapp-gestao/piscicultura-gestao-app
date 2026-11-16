@@ -1,6 +1,7 @@
 // Ponto de entrada: sessão, perfil, roteamento, sincronização offline.
 import { SUPABASE_URL, SUPABASE_ANON_KEY, TIMEOUT_REDE_MS, TIMEOUT_LEITURA_MS, LIMITE_ABERTURA_MS, JANELA_SEM_REDE_MS, TERMOS_VERSAO } from './config.js';
 import { iniciarSeg } from './seg.js';
+import { iniciarSanfona } from './sanfona.js';
 import { DEV_LOGIN, loginAutomaticoAtivo } from './dev-login.js';
 import { esc, parseHash, ROTULO_PAPEL, traduzErro, ehErroDeRede, plural, ligarMascaraMoeda } from './util.js';
 import { criarApi } from './api.js';
@@ -603,6 +604,7 @@ function criarCliente() {
 
 async function iniciar() {
   iniciarSeg();
+  iniciarSanfona(); // balões que abrem e fecham deslizam
   if (SUPABASE_ANON_KEY.startsWith('COLE_') || !window.supabase) {
     mostrarMensagem('Configuração pendente', 'A chave do Supabase ainda não foi configurada neste app (js/config.js).', false);
     return;
