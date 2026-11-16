@@ -1,14 +1,14 @@
 // Tela de um tanque (todos os papéis): números de cada lote, sobrevivência, previsão de despesca e atalhos para lançar.
 import { esc, fmtInt, fmtNum, fmtData, hojeISO, diasEntre, num, ROTULO_TIPO, FASES, faseCss, progresso, fmtPct } from '../util.js';
 import * as db from '../db.js';
-import { previsaoDespesca, vivosDoLote } from '../calc.js';
+import { previsaoDespesca, vivosDoLote, previsaoRacao } from '../calc.js';
 import { icone } from '../icons.js';
 import { pedirTexto } from '../dialogo.js';
-import { metaDe, htmlPrevisao, PROXIMA_FASE } from './despesca.js';
+import { metaDe, metasDe, htmlPrevisao, htmlPrevRacao, origemPesoVenda, PROXIMA_FASE } from './despesca.js';
 import { dadosDoDia, formatosSaco } from './dia.js';
 import { acoesDoTanque } from './ronda.js';
 
-export function htmlCardTanque(tanque, lotes, resumo, racaoHojeLocal, hoje, metas = {}, podeGerir = false, acoesHtml = '') {
+export function htmlCardTanque(tanque, lotes, resumo, racaoHojeLocal, hoje, metas = {}, podeGerir = false, acoesHtml = '', kgSaco = 25) {
   const nomeLote = (l) => `${ROTULO_TIPO[l.tipo] || l.tipo} · ${l.especie}`;
   const blocos = lotes.length
     ? lotes.map((l) => {
@@ -30,7 +30,7 @@ export function htmlCardTanque(tanque, lotes, resumo, racaoHojeLocal, hoje, meta
             <div><span>Peixes vivos (estim.)</span><b>${fmtInt(vivos ?? l.quantidade_inicial)}</b></div>
           </div>
           ${vivos != null && l.quantidade_inicial > 0 ? ((sv) => `<div class="td-sobre">${progresso((sv / l.quantidade_inicial) * 100, { tom: 'ok', rotulo: `Sobrevivência ${fmtPct((sv / l.quantidade_inicial) * 100)}%` })}<p class="h-trilho-leg"><span>Sobrevivência: ${fmtInt(sv)} de ${fmtInt(l.quantidade_inicial)} peixes${Number(r.despescados) ? ` (${fmtInt(r.despescados)} já despescados)` : ''}${Number(r.transferidos) ? ` (${fmtInt(r.transferidos)} transferidos)` : ''}</span><b>${fmtPct((sv / l.quantidade_inicial) * 100)}%</b></p></div>`)(Math.max(0, l.quantidade_inicial - (Number(r.mortos) || 0))) : ''}
-          ${r ? `<div class="td-prev"><div class="td-prev-cab"><span>${PROXIMA_FASE[l.tipo] ? 'Mudança de fase' : 'Despesca'}</span><button class="link" type="button" data-meta="${esc(l.id)}">Mudar meta</button></div>${htmlPrevisao(previsaoDespesca(l, r, metaDe(l, metas), hoje), l.tipo)}</div>` : ''}
+          ${r ? `<div class="td-prev"><div class="td-prev-cab"><span>${PROXIMA_FASE[l.tipo] ? 'Mudança de fase' : 'Despesca'}</span>${podeGerir ? `<button class="link" type="button" data-meta="${esc(l.id)}">${l.tipo === 'engorda' ? 'Peso de venda' : 'Mudar meta'}</button>` : ''}</div>${htmlPrevisao(previsaoDespesca(l, r, metaDe(l, metas), hoje), l.tipo)}${htmlPrevRacao(previsaoRacao(l, r, metaDe(l, metas)), kgSaco, l.tipo)}</div>` : ''}
         </section>`;
       }).join('')
     : podeGerir
@@ -67,7 +67,8 @@ export async function renderTanqueDetalhe(ctx, el, id) {
   const { resumo, semDetalhe, numerosGuardados, hoje } = D;
   const F = formatosSaco(state.ref.kgSaco);
   const meus = state.ref.lotes.filter((l) => l.tanque_id === id);
-  const metas = (await db.kvGet('metasDespesca')) || {};
+  const local = (await db.kvGet('metasDespesca')) || {};
+  const metas = metasDe(state.ref, local); // engorda: peso de venda do tanque ou da fazenda (sql/38)
   const gerir = ctx.podeGerir();
 
   // ração de hoje: já dada, ou quanto dar (média da semana; sem média, a sugestão pelo peso dos peixes)
@@ -94,7 +95,7 @@ export async function renderTanqueDetalhe(ctx, el, id) {
     <div class="acoes4">${grandes.map((a) => `<a class="acao${a.feita ? ' feita' : ''}${a.ruim ? ' ruim' : ''}${a.alerta ? ' alerta' : ''}" href="${a.href}" data-acao="${a.tipo}">${icone(a.ic, 28)}<span>${esc(a.rot)}</span><small>${esc(a.sub)}</small></a>`).join('')}</div>`;
 
   el.innerHTML = `${semDetalhe ? '<p class="aviso">Sem conexão: os totais aparecem quando houver internet.</p>' : numerosGuardados ? '<p class="aviso">Sem conexão: números da última atualização.</p>' : ''}
-    ${htmlCardTanque(tanque, meus, resumo, D.racaoHojeLocal, hoje, metas, gerir, acoesHtml)}
+    ${htmlCardTanque(tanque, meus, resumo, D.racaoHojeLocal, hoje, metas, gerir, acoesHtml, state.ref.kgSaco || 25)}
     <ul class="lista td-lista card">
       ${meus.length ? outras.map((a) => `<li><a class="item" href="${a.href}" data-acao="${a.tipo}"><span class="item-ic">${icone(a.ic)}</span><span class="esq"><b>${esc(a.rot)}</b><small>${esc(a.sub)}</small></span><span class="seta">${icone('direita', 20)}</span></a></li>`).join('') : ''}
       ${meus.length ? `<li><a class="item td-rel" href="#/relatorio/${esc(meus[0].id)}"><span class="item-ic">${icone('relatorio')}</span><span class="esq"><b>Relatório do lote</b><small>Peso, ração, mortes, água, lançamentos e PDF</small></span><span class="seta">${icone('direita', 20)}</span></a></li>` : ''}
@@ -104,10 +105,24 @@ export async function renderTanqueDetalhe(ctx, el, id) {
   if (!el.querySelector('.td-lista li')) el.querySelector('.td-lista').remove();
   el.querySelectorAll('[data-meta]').forEach((b) => b.addEventListener('click', async () => {
     const l = meus.find((x) => x.id === b.dataset.meta); if (!l) return;
+    if (l.tipo === 'engorda') {
+      // peso de venda do TANQUE (sql/38): vazio = usa o da fazenda
+      const daFazenda = Number(state.ref.pesoVenda) > 0 ? Number(state.ref.pesoVenda) : null;
+      const proprio = Number(tanque.peso_venda_kg) > 0 ? Number(tanque.peso_venda_kg) : null;
+      const v = await pedirTexto({ titulo: 'Peso de venda deste tanque', rotulo: `Peso médio de cada peixe na venda (kg)${daFazenda ? `. Deixe vazio para usar o da fazenda (${String(daFazenda).replace('.', ',')} kg)` : ''}`,
+        valor: proprio ? String(proprio).replace('.', ',') : '', placeholder: daFazenda ? String(daFazenda).replace('.', ',') : 'Ex.: 3,5', maxlength: 8, vazioOk: true,
+        validar: (t) => (!String(t || '').trim() || (num(t) > 0 && num(t) <= 20) ? '' : 'Informe o peso em kg, ex.: 3,5') });
+      if (v === null || v === undefined) return;
+      const kg = String(v).trim() ? num(v) : null;
+      try { await ctx.api.salvarPesoVendaTanque(tanque.id, kg); await ctx.atualizarRef(true); }
+      catch (e) { return ctx.toast(/peso_venda_kg/.test(e.message || '') ? 'Falta rodar o sql/38 no Supabase.' : e.message, 'erro'); }
+      ctx.toast(kg ? `Peso de venda do tanque: ${String(kg).replace('.', ',')} kg` : 'O tanque usa o peso de venda da fazenda', 'ok');
+      return renderTanqueDetalhe(ctx, el, id);
+    }
     const v = await pedirTexto({ titulo: 'Meta de despesca', rotulo: 'Peso médio de cada peixe na despesca (kg)', texto: String(metaDe(l, metas)).replace('.', ','), placeholder: 'Ex.: 2,5', maxlength: 8,
       validar: (t) => (num(t) > 0 && num(t) < 100 ? '' : 'Informe o peso em kg, ex.: 2,5') });
     if (!v) return;
-    metas[l.id] = num(v); await db.kvSet('metasDespesca', metas);
+    local[l.id] = num(v); await db.kvSet('metasDespesca', local);
     ctx.toast('Meta de despesca salva neste aparelho', 'ok');
     renderTanqueDetalhe(ctx, el, id);
   }));

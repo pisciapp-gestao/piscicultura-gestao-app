@@ -5,7 +5,7 @@ import { ESTOQUE_ATENCAO_DIAS, ESTOQUE_CRITICO_DIAS, ESTOQUE_COBERTURA_DIAS, CON
 import { icone } from '../icons.js';
 import { pedirTexto } from '../dialogo.js';
 import { pizza, COR_FASE, ORDEM_FASE, COR_RACAO } from '../graficos.js';
-import { metaDe, htmlPrevisao } from './despesca.js';
+import { metaDe, metasDe, htmlPrevisao } from './despesca.js';
 import { pintarTempo } from './tempo.js';
 import { dadosDoDia, situacaoTanque, formatosSaco, ordemNatural, statusTanque } from './dia.js';
 import { renderRonda } from './ronda.js';
@@ -58,7 +58,7 @@ export async function renderHome(ctx, el) {
   // lembrete de contagem: a ração em uso há mais tempo sem contar
   const paraContar = usadas.filter((s) => Number(s.consumo_7d_kg) > 0).sort((a, b) => String(a.ultima_contagem || '').localeCompare(String(b.ultima_contagem || '')))[0] || usadas[0] || null;
 
-  const metas = (await db.kvGet('metasDespesca')) || {};
+  const metas = metasDe(ctx.state.ref, (await db.kvGet('metasDespesca')) || {}); // engorda: peso de venda (sql/38)
   const F = formatosSaco(state.ref.kgSaco);
   const { kgS, sacos, nSacos } = F;
 

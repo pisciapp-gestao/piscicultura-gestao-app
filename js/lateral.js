@@ -6,7 +6,7 @@ import * as db from './db.js';
 import { icone } from './icons.js';
 import { situacaoEstoque, previsaoDespesca } from './calc.js';
 import { descricao } from './clima.js';
-import { metaDe } from './views/despesca.js';
+import { metaDe, metasDe } from './views/despesca.js';
 import { ESTOQUE_ATENCAO_DIAS, ESTOQUE_CRITICO_DIAS, ESTOQUE_COBERTURA_DIAS, PESO_SACO_PADRAO_KG } from './config.js';
 
 // Todos os atalhos possíveis, já filtrados pelo papel de quem está usando: [id, rota marcada, link, ícone, texto]
@@ -82,7 +82,7 @@ export async function atualizarLateral(ctx) {
     blocos.push(`<a class="lat-item" href="#/estoque"><span>Estoque</span><b>${fmtInt(tot / kgS)} <small>sacos</small></b>${sit.dias != null ? `${progresso((sit.dias / ESTOQUE_COBERTURA_DIAS) * 100, { fina: true, tom, rotulo: `Dura ${Math.floor(sit.dias)} dias` })}<small>dura ~${fmtInt(Math.floor(sit.dias))} dias</small>` : ''}</a>`);
   }
   if (ctx.podeGerir() && cache.resumo) {
-    const metas = (await db.kvGet('metasDespesca')) || {};
+    const metas = metasDe(ctx.state.ref, (await db.kvGet('metasDespesca')) || {}); // engorda: peso de venda (sql/38)
     const prox = lotes.filter((l) => l.tipo === 'engorda').map((l) => ({ l, p: previsaoDespesca(l, resumo[l.id], metaDe(l, metas), hoje) }))
       .filter((x) => x.p.estado !== 'sem-dado').sort((a, b) => (a.p.estado === 'pronto' ? -1 : 0) - (b.p.estado === 'pronto' ? -1 : 0) || String(a.p.data).localeCompare(String(b.p.data)))[0];
     if (prox) {

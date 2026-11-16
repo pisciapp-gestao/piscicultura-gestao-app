@@ -1463,3 +1463,11 @@ a.acao:active, .rl-tq:active { transform: scale(.98); }
 
 /* balão fechando (js/sanfona.js): a setinha volta a apontar para baixo já no começo do recolhimento */
 details.fechando[open] > summary::after { transform: rotate(45deg) translateY(-2px); }
+
+/* ração até vender, na tela do tanque (tabela Socil, 16/11/2026) */
+.td-racao-falta, .td-racao-agora { margin: .7rem 0 0; display: grid; gap: .1rem; font-size: .93rem; }
+.td-racao-falta b { font-weight: 700; }
+.td-racao-falta small, .td-racao-agora small { color: var(--tinta-2); font-size: .8rem; }
+.td-racao-agora { padding-top: .6rem; border-top: 1px solid var(--linha); }
+.td-racao-agora span { color: var(--tinta-2); font-size: .82rem; }
+.td-racao-agora b { font-size: 1rem; }

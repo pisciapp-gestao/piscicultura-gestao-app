@@ -70,6 +70,18 @@ export function criarApi(client) {
       if (error || !data || !(Number(data.kg_saco) > 0)) return null;
       return Number(data.kg_saco);
     },
+    // peso de venda da fazenda (sql/38); null se não definido ou se o sql/38 ainda não rodou
+    async pesoVenda() {
+      const { data, error } = await client.from('fazendas').select('peso_venda_kg').maybeSingle();
+      if (error || !data || !(Number(data.peso_venda_kg) > 0)) return null;
+      return Number(data.peso_venda_kg);
+    },
+    async salvarPesoVenda(fazendaId, kg) {
+      ok(await client.from('fazendas').update({ peso_venda_kg: kg }).eq('id', fazendaId));
+    },
+    async salvarPesoVendaTanque(tanqueId, kg) {
+      ok(await client.from('tanques').update({ peso_venda_kg: kg }).eq('id', tanqueId));
+    },
     async salvarKgSaco(fazendaId, kg) {
       ok(await client.from('fazendas').update({ kg_saco: kg }).eq('id', fazendaId));
     },
@@ -96,7 +108,13 @@ export function criarApi(client) {
     },
     async tanques() {
       // area_ha vem do sql/17; sem ele, lê só o nome
-      const r = await client.from('tanques').select('id,nome,area_ha').order('nome');
+      // peso_venda_kg vem do sql/38; sem ele, lê sem essa coluna
+      const r = await client.from('tanques').select('id,nome,area_ha,peso_venda_kg').order('nome');
+      if (r.error && /peso_venda_kg/i.test(r.error.message || '')) {
+        const r2 = await client.from('tanques').select('id,nome,area_ha').order('nome');
+        if (r2.error && /area_ha/i.test(r2.error.message || '')) return ok(await client.from('tanques').select('id,nome').order('nome'));
+        return ok(r2);
+      }
       if (r.error && /area_ha/i.test(r.error.message || '')) return ok(await client.from('tanques').select('id,nome').order('nome'));
       return ok(r);
     },

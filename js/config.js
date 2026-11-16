@@ -87,13 +87,65 @@ export const ALERTAS = {
   morteDiasSeguidos: 3,  // mortes no mesmo tanque por esse número de dias seguidos
 };
 
-// Sugestão de ração do dia: % do peso vivo (biomassa) por faixa de peso médio do peixe — tambaqui.
-// Fontes: Embrapa Amazônia Ocidental e INPA (juvenil até 250 g: 5% deu a melhor conversão; redução de 5% para 3%
-// ao longo do cultivo). Faixas acima de 800 g SEM fonte confirmada: PROVISÓRIAS, confirmar com o técnico da fazenda.
-export const TAXA_RACAO = [
-  { ateKg: 0.05, pct: 6, provisoria: true },
-  { ateKg: 0.25, pct: 5 },
-  { ateKg: 0.8, pct: 3 },
-  { ateKg: 1.5, pct: 2, provisoria: true },
-  { ateKg: Infinity, pct: 1.5, provisoria: true },
+// Programa alimentar Socil Laguna, tambaqui em viveiro escavado, Roraima (26 a 32 °C), enviado pelo cliente piloto (16/11/2026).
+// Uma linha por semana: [semana, peso inicial g, peso final g, % da biomassa por dia, ração, tratos por dia, kg na semana para 40.000 peixes].
+// A tabela soma 230.886 kg em 52 semanas (conversão 1,6, sem mortalidade); na fazenda real deu 1,9 a 2,4.
+export const SOCIL = [
+  [1, 2, 5, 20, 'Nanolis 0,8 a 1,0 mm', 6, 112],
+  [2, 5, 10, 10, 'Nanolis 1,3 a 1,8 mm', 6, 140],
+  [3, 10, 18, 6.2, 'Nanolis 1,8 mm', 6, 174.2],
+  [4, 18, 28, 5.6, 'Alevinos 45 · 2,6 mm', 4, 284.7],
+  [5, 28, 40, 5.2, 'Alevinos 45 · 2,6 mm', 4, 408.2],
+  [6, 40, 53, 4.8, 'Onívoros Alevinos 36 · 2,6 mm', 4, 542.6],
+  [7, 53, 66, 4.5, 'Onívoros Alevinos 36 · 2,6 mm', 4, 673.5],
+  [8, 66, 80, 4.3, 'Peixes Brasileiros 32 · 4 mm', 4, 789.7],
+  [9, 80, 100, 4, 'Peixes Brasileiros 32 · 4 mm', 3, 904.8],
+  [10, 100, 130, 3.8, 'Peixes Brasileiros 32 · 4 mm', 3, 1072.4],
+  [11, 130, 161, 3.6, 'Peixes Brasileiros 32 · 6 mm', 3, 1325.2],
+  [12, 161, 200, 3.5, 'Peixes Brasileiros 32 · 6 mm', 3, 1563.4],
+  [13, 200, 245, 3.3, 'Sport 28 · 6 mm', 2, 1853.1],
+  [14, 245, 297, 3.2, 'Sport 28 · 6 mm', 2, 2169.1],
+  [15, 297, 350, 3, 'Sport 28 · 6 mm', 2, 2515.6],
+  [16, 350, 404, 2.9, 'Sport 28 · 6 mm', 2, 2838.9],
+  [17, 404, 463, 2.8, 'Sport 28 · 6 mm', 2, 3140.7],
+  [18, 463, 524, 2.7, 'Sport 28 · 6 mm', 2, 3452.3],
+  [19, 524, 586, 2.6, 'Sport 28 · 6 mm', 2, 3749.6],
+  [20, 586, 650, 2.5, 'Sport 28 · 6 mm', 2, 4026.2],
+  [21, 650, 710, 2.4, 'Sport 28 · 6 mm', 2, 4289.6],
+  [22, 710, 772, 2.3, 'Sport 28 · 6 mm', 2, 4501.9],
+  [23, 772, 836, 2.2, 'Sport 28 · 6 mm', 2, 4704.2],
+  [24, 836, 900, 2.1, 'Sport 28 · 6 mm', 2, 4896.4],
+  [25, 900, 975, 2, 'Sport 28 · 10 mm', 2, 5067],
+  [26, 975, 1050, 1.9, 'Sport 28 · 10 mm', 2, 5276.7],
+  [27, 1050, 1125, 1.9, 'Sport 28 · 10 mm', 2, 5462.3],
+  [28, 1125, 1200, 1.8, 'Sport 28 · 10 mm', 2, 5625],
+  [29, 1200, 1287, 1.7, 'Sport 28 · 10 mm', 2, 5765.9],
+  [30, 1287, 1375, 1.6, 'Sport 28 · 10 mm', 2, 5941.3],
+  [31, 1375, 1462, 1.6, 'Sport 28 · 10 mm', 2, 6096.9],
+  [32, 1462, 1550, 1.5, 'Sport 28 · 10 mm', 2, 6224.7],
+  [33, 1550, 1637, 1.5, 'Sport 28 · 10 mm', 2, 6334.2],
+  [34, 1637, 1725, 1.4, 'Sport 28 · 10 mm', 2, 6418],
+  [35, 1725, 1812, 1.3, 'Sport 28 · 10 mm', 2, 6485],
+  [36, 1812, 1900, 1.3, 'Sport 28 · 10 mm', 2, 6528.3],
+  [37, 1900, 1987, 1.2, 'Sport 28 · 10 mm', 2, 6556],
+  [38, 1987, 2075, 1.2, 'Sport 28 · 10 mm', 2, 6561.6],
+  [39, 2075, 2162, 1.1, 'Sport 28 · 10 mm', 2, 6552.5],
+  [40, 2162, 2250, 1.1, 'Sport 28 · 10 mm', 2, 6522.9],
+  [41, 2250, 2362, 1, 'Sport 28 · 10 mm', 2, 6479.6],
+  [42, 2362, 2475, 1, 'Sport 28 · 10 mm', 2, 6485.7],
+  [43, 2475, 2587, 0.9, 'Sport 28 · 10 mm', 2, 6472.2],
+  [44, 2587, 2700, 0.9, 'Sport 28 · 10 mm', 2, 6434.4],
+  [45, 2700, 2800, 0.8, 'Sport 28 · 10 mm', 2, 6378.2],
+  [46, 2800, 2900, 0.8, 'Sport 28 · 10 mm', 2, 6614.4],
+  [47, 2900, 3000, 0.8, 'Sport 28 · 10 mm', 2, 6788.3],
+  [48, 3000, 3100, 0.8, 'Sport 28 · 10 mm', 2, 7022.4],
+  [49, 3100, 3200, 0.8, 'Sport 28 · 10 mm', 2, 7256.5],
+  [50, 3200, 3300, 0.8, 'Sport 28 · 10 mm', 2, 7490.1],
+  [51, 3300, 3400, 0.8, 'Sport 28 · 10 mm', 2, 7724.6],
+  [52, 3400, 3600, 0.8, 'Sport 28 · 10 mm', 2, 8192.8],
 ];
+export const SOCIL_PEIXES = 40000;
+
+// Sugestão de ração do dia: % do peso vivo (biomassa) pela faixa de peso médio da tabela Socil (acima de 3,6 kg, 0,8%)
+export const TAXA_RACAO = [...SOCIL.map(([, , pf, pct]) => ({ ateKg: pf / 1000, pct })), { ateKg: Infinity, pct: 0.8 }];
+
