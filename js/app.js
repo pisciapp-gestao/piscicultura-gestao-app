@@ -529,6 +529,8 @@ async function rotear() {
   registrarRota(location.hash, rota, partes);
   const el = document.createElement('div'); // contêiner novo por rota: renderizações atrasadas não sujam a tela atual
   el.className = 'tela-entra'; // troca de tela suave (css: .tela-entra)
+  // telas principais: os blocos entram em cascata, um logo depois do outro (css: .cascata)
+  if (['', 'relatorio', 'mais', 'fazenda', 'lucro'].includes(rota) && partes[0] !== 'racao') el.classList.add('cascata');
   view.replaceChildren(...(ehAbaPrincipal(rota, partes) ? [] : [linhaVoltar(rota)]), el);
   const meu = ++tokenRota;
   window.scrollTo(0, 0);

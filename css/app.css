@@ -777,6 +777,13 @@ body.sem-rolagem { overflow: hidden; }
 .tela-entra { animation: tela-entra .2s var(--ease) both; }
 .painel-entra { animation: so-aparece .15s var(--ease) both; }
 .hoje-tanques .tq, .lista-grade > li { animation: tela-entra .22s var(--ease) both; }
+/* Hoje, Relatórios e Fazenda: cada bloco da tela entra 35ms depois do anterior (no máximo 8 degraus) */
+.tela-entra.cascata { animation: none; }
+.cascata > * { animation: tela-entra .24s var(--ease) both; }
+.cascata > :nth-child(2) { animation-delay: 35ms; } .cascata > :nth-child(3) { animation-delay: 70ms; }
+.cascata > :nth-child(4) { animation-delay: 105ms; } .cascata > :nth-child(5) { animation-delay: 140ms; }
+.cascata > :nth-child(6) { animation-delay: 175ms; } .cascata > :nth-child(7) { animation-delay: 210ms; }
+.cascata > :nth-child(n+8) { animation-delay: 245ms; }
 .hoje-tanques .tq:nth-child(2), .lista-grade > li:nth-child(2) { animation-delay: 30ms; }
 .hoje-tanques .tq:nth-child(3), .lista-grade > li:nth-child(3) { animation-delay: 60ms; }
 .hoje-tanques .tq:nth-child(4), .lista-grade > li:nth-child(4) { animation-delay: 90ms; }
@@ -795,7 +802,7 @@ body.sem-rolagem { overflow: hidden; }
   #toast.on .toast-visto path { animation: none; stroke-dashoffset: 0; }
   .dialogo, .dialogo-caixa, .sucesso-ic { animation: none; }
   /* com menos movimento: a tela nova só aparece, sem subir nem cascata */
-  .tela-entra, .painel-entra { animation: so-aparece .15s ease-out both; }
+  .tela-entra, .painel-entra { animation: so-aparece .15s ease-out both; } .cascata > * { animation: so-aparece .15s ease-out both; }
   .hoje-tanques .tq, .lista-grade > li { animation: none; }
 }
 @media print {
