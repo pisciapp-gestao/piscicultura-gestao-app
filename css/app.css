@@ -234,7 +234,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--r
 }
 .seg > button.on { color: var(--tinta); font-weight: 600; border-bottom-color: var(--rio); }
 .seg[style*="--n:4"] > button { font-size: .9rem; }
-.seg-bolha { display: none; }
+/* risquinho que desliza até a aba escolhida (15/11/2026). O js/seg.js põe a caixa sobre o botão aceso; o risco é a base dela */
+.seg-bolha { position: absolute; left: 0; pointer-events: none; }
+.seg-bolha::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px; background: var(--rio); }
+.seg-bolha.anim { transition: transform .26s var(--ease), width .26s var(--ease), opacity .15s; }
+.seg:has(> .seg-bolha) > button.on { border-bottom-color: transparent; }
 
 /* ----- avisos ----- */
 .aviso, .erro, .ok-msg { padding: .75rem .95rem; border-radius: var(--r-campo); font-size: .95rem; margin: .6rem 0; }
@@ -783,6 +787,7 @@ body.sem-rolagem { overflow: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
   .abas.pronta .abas-ind { transition: opacity .15s; }
+  .seg-bolha.anim { transition: opacity .15s; }
   .abas a span { transition: none; }
   .btn, .tile, .tq, .hub-card, .item { transition: none; }
   .btn:active, .tile:active, a.tq:active, .hub-card:active, .item:active { transform: none; }
