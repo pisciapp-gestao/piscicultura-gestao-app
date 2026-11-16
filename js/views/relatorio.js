@@ -267,7 +267,7 @@ export async function renderRelatorioLote(ctx, el, id) {
     if (!pr) return '';
     return `<section class="bloco"><h2>Ração até ${PROXIMA_FASE[lote.tipo] ? 'passar de fase' : 'vender'}</h2>
       <div class="card td-prev"><p class="mudo" style="margin:0">${PROXIMA_FASE[lote.tipo] ? 'Meta da fase' : 'Peso de venda'}: <b>${pr.alvoKg < 1 ? `${fmtNum(pr.alvoKg * 1000, 0)} g` : `${fmtNum(pr.alvoKg, 1)} kg`}</b> · agora ${pr.pmKg < 1 ? `${fmtNum(pr.pmKg * 1000, 0)} g` : `${fmtNum(pr.pmKg, 2)} kg`}</p>
-      ${pr.pronto ? `<p class="td-racao-falta"><b>Já está no peso.</b></p>` : ''}${htmlPrevRacao(pr, kgS, lote.tipo)}</div></section>`;
+      ${pr.pronto ? `<p class="mudo" style="margin:.6rem 0 0"><b>Já está no peso.</b></p>` : ''}${htmlPrevRacao(pr, kgS, lote.tipo)}</div></section>`;
   };
 
   // transferências: de onde vieram e para onde foram os peixes, com o custo de ração que foi junto

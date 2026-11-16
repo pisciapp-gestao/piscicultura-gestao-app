@@ -25,10 +25,13 @@ export function htmlPrevRacao(pr, kgSaco, tipo = 'engorda') {
   if (!pr) return '';
   const sacos = (kg) => fmtInt(Math.round(kg / kgSaco));
   const ate = PROXIMA_FASE[tipo] ? 'até passar de fase' : 'até vender';
-  const falta = pr.pronto ? '' : `<p class="td-racao-falta"><span>Faltam ≈ <b>${sacos(pr.faltaKg)} sacos</b> de ração ${ate}</span>
-    <small>${pr.fator && Math.round(Math.abs(pr.fator - 1) * 100) >= 1 ? `Pela tabela Socil seriam ${sacos(pr.tabelaKg)} sacos; este lote está gastando ${fmtInt(Math.round(Math.abs(pr.fator - 1) * 100))}% ${pr.fator > 1 ? 'a mais' : 'a menos'} que a tabela` : 'Pela tabela Socil, para os peixes vivos'}</small></p>`;
-  const agora = pr.agora ? `<p class="td-racao-agora"><span>Ração certa agora</span><b>${esc(pr.agora.racao)}</b><small>${fmtInt(pr.agora.tratos)} ${pr.agora.tratos === 1 ? 'trato' : 'tratos'} por dia · ${fmtNum(pr.agora.pct, 1)}% do peso dos peixes</small></p>` : '';
-  return falta + agora;
+  const dif = pr.fator ? Math.round(Math.abs(pr.fator - 1) * 100) : 0;
+  const falta = pr.pronto ? '' : `<div class="ra-tile ra-falta"><span>Faltam ${ate}</span><b>${sacos(pr.faltaKg)}<em>sacos</em></b>
+    <small>${dif >= 1 ? `Tabela Socil: ${sacos(pr.tabelaKg)}. Este lote gasta ${fmtInt(dif)}% ${pr.fator > 1 ? 'a mais' : 'a menos'}` : 'Pela tabela Socil'}</small></div>`;
+  const [nome, grao] = pr.agora ? String(pr.agora.racao).split(' · ') : [];
+  const agora = pr.agora ? `<div class="ra-tile ra-agora"><span>Ração agora</span><b>${esc(nome)}</b>
+    <small>${grao ? `${esc(grao)} · ` : ''}${fmtInt(pr.agora.tratos)} ${pr.agora.tratos === 1 ? 'trato' : 'tratos'}/dia · ${fmtNum(pr.agora.pct, 1)}% do peso</small></div>` : '';
+  return `<div class="ra-grade${falta && agora ? '' : ' ra-uma'}">${falta}${agora}</div>`;
 }
 export const pesoTxt = (kg) => (kg < 1 ? `${fmtNum(kg * 1000, 0)} g` : `${fmtNum(kg, kg < 10 ? 1 : 0)} kg`);
 export const dataCurta = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).replace('.', '');
