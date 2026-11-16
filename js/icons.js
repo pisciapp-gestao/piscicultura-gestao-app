@@ -27,6 +27,7 @@ const P = {
   probi: '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/>',
   despesca: '<path d="M3 13c4-6 12-6 16 0-4 6-12 6-16 0z"/><path d="m19 13 3-3v6z"/>',
   apagar: '<path d="M9 5h11v14H9l-6-7z"/><path d="m12.5 9.5 5 5M17.5 9.5l-5 5"/>',
+  transferir: '<path d="M4 8h13"/><path d="m13 4 4 4-4 4"/><path d="M20 16H7"/><path d="m11 20-4-4 4-4"/>',
   desfazer: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   ajuste: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
   peixe: '<g fill="currentColor" stroke="none"><path d="M1.4 4.6 7.2 12l-5.8 7.4L3.6 12z"/><rect x="8.2" y="9.5" width="2.4" height="5" rx="1.2"/><rect x="11.4" y="7" width="2.4" height="10" rx="1.2"/><rect x="14.6" y="5.5" width="2.4" height="13" rx="1.2"/><path fill-rule="evenodd" d="M17.8 9.7a1.2 1.2 0 0 1 2.4 0v4.6a1.2 1.2 0 0 1-2.4 0zM18.2 10.9a.8.8 0 1 0 1.6 0 .8.8 0 1 0-1.6 0z"/></g>',
