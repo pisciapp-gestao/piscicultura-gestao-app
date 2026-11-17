@@ -1531,4 +1531,7 @@ details.fechando[open] > summary::after { transform: rotate(45deg) translateY(-2
 @media (prefers-reduced-motion: reduce) { .rc-escolha.falta .rc-tiles { animation: none; } .rc-tile:active { transform: none; } }
 .rc-tag { display: inline-block; margin-top: .3rem; font-style: normal; font-size: .72rem; font-weight: 600; letter-spacing: .01em;
   color: var(--cor); border: 1px solid var(--cor); border-radius: 4px; padding: 0 .35rem; background: var(--card); }
+.rc-diz { margin: 0 0 .6rem; padding: .6rem .75rem; border-radius: var(--r-card); background: var(--rio-claro); color: var(--tinta); font-size: .9rem; line-height: 1.4; }
+.rc-diz span { display: block; color: var(--tinta-2); font-size: .82rem; margin-top: .15rem; }
+.rc-outra { margin: .6rem 0 0; font-size: .88rem; }
 .rc-tile.on .rc-tag { color: #fff; border-color: rgba(255, 255, 255, .7); background: transparent; }

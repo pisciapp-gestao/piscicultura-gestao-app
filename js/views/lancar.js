@@ -212,8 +212,10 @@ export async function renderLancar(ctx, el, params = {}) {
       </section>
       ${porRacao ? `<section class="passo tipo-racao rc-escolha" id="rc-escolha">
         <h2 class="passo-t"><i>2</i> Qual ração?</h2>
+        <p class="rc-diz" id="rc-diz" hidden></p>
         <div class="rc-tiles" role="radiogroup" aria-label="Qual ração foi dada">${racoesLanc.map(tileRacao).join('')}</div>
         <p class="erro" id="rc-erro" hidden>Escolha qual ração foi dada.</p>
+        <p class="aviso rc-outra" id="rc-outra" role="status" hidden></p>
       </section>` : ''}
       <section class="passo tipo-${tipo}">
         <h2 class="passo-t"><i>${porRacao ? 3 : 2}</i> ${TITULO2[tipo]}</h2>
@@ -274,7 +276,19 @@ export async function renderLancar(ctx, el, params = {}) {
     racaoEscolhida = b.dataset.racao;
     rcBox.querySelectorAll('[data-racao]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); });
     rcBox.querySelector('#rc-erro').hidden = true; rcBox.classList.remove('falta');
+    avisarOutraRacao();
   }));
+  // o que a tabela pede para este tanque (preenchido por marcarPelaTabela)
+  let pelaTabela = null; // { id, nome, txtPeso, racao }
+  function avisarOutraRacao() {
+    const av = rcBox && rcBox.querySelector('#rc-outra');
+    if (!av) return;
+    const outra = pelaTabela && pelaTabela.id && racaoEscolhida && racaoEscolhida !== pelaTabela.id;
+    av.hidden = !outra;
+    if (!outra) return;
+    const esc1 = racoesLanc.find((r) => r.id === racaoEscolhida);
+    av.innerHTML = `Você escolheu <b>${esc(esc1 ? esc1.nome : 'outra ração')}</b>, mas para peixe de ${esc(pelaTabela.txtPeso)} a tabela pede <b>${esc(pelaTabela.nome)}</b>. Pode salvar assim mesmo, se foi isso que deu.`;
+  }
   const faltaRacao = () => {
     rcBox.querySelector('#rc-erro').hidden = false;
     rcBox.classList.remove('falta'); void rcBox.offsetWidth; rcBox.classList.add('falta');
@@ -560,11 +574,13 @@ export async function renderLancar(ctx, el, params = {}) {
       <small>${fmtNum(sug.pct, 1)}% do peso vivo${ctx.podeGerir() ? ` (${bio} de peixe)` : ''}${sug.provisoria ? ' · taxa provisória, confirme com o técnico' : ''}</small>`;
     box.querySelector('#b-sug').onclick = () => { const q = f.querySelector('#racao-kg'); q.value = kgTxt(kgSug); q.dispatchEvent(new Event('input')); q.focus(); };
   }
-  // etiqueta "pela tabela" no botão da ração que a tabela de alimentação indica para o peso deste tanque.
-  // Só uma dica: nada vem marcado, o tratador continua tendo que escolher (pedido de 17/11/2026).
+  // "pela tabela": frase acima dos botões (peso médio → ração e tratos da tabela), etiqueta no botão da ração indicada
+  // e aviso amarelo se o tratador escolher outra. Só dica: nada vem marcado e o aviso não bloqueia (pedido de 17/11/2026).
   async function marcarPelaTabela() {
     if (!rcBox) return;
     rcBox.querySelectorAll('.rc-tag').forEach((x) => x.remove());
+    const diz = rcBox.querySelector('#rc-diz');
+    diz.hidden = true; pelaTabela = null;
     if (!resumoLotes) resumoLotes = navigator.onLine ? Object.fromEntries(((await ctx.api.resumoLotes().catch(() => [])) || []).map((r) => [r.lote_id, r]))
       : Object.fromEntries(((await ctx.api.resumoGuardado().catch(() => [])) || []).map((r) => [r.lote_id, r]));
     let peixes = 0, kg = 0;
@@ -577,6 +593,15 @@ export async function renderLancar(ctx, el, params = {}) {
     const certa = t && racaoDaTabela(t.racao, racoesLanc);
     const b = certa && rcBox.querySelector(`[data-racao="${certa.id}"]`);
     if (b) b.insertAdjacentHTML('beforeend', '<em class="rc-tag">pela tabela</em>');
+    if (t) {
+      const pm = kg / peixes, porTrato = (kg * t.pct) / 100 / t.tratos;
+      const kgT = porTrato < 10 ? Math.round(porTrato * 10) / 10 : Math.round(porTrato);
+      pelaTabela = { id: b ? certa.id : null, nome: b ? certa.nome : t.racao, txtPeso: pesoMedioTxt(pm), racao: t.racao };
+      diz.innerHTML = `Peixe médio de <b>${esc(pesoMedioTxt(pm))}</b>: a tabela pede <b>${esc(t.racao)}</b>, ${t.tratos} tratos de ${esc(kgTxt(kgT))} kg.`
+        + (b ? '' : ' <span>A fazenda não tem essa ração cadastrada.</span>');
+      diz.hidden = false;
+    }
+    avisarOutraRacao();
   }
   if (tipo === 'racao') { mostrarSugestao(); selTanque.addEventListener('change', mostrarSugestao); }
   if (porRacao) { marcarPelaTabela(); selTanque.addEventListener('change', marcarPelaTabela); }
