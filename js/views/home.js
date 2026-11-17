@@ -4,7 +4,7 @@ import { situacaoEstoque, previsaoDespesca, alertasManejo, vivosDoLote } from '.
 import { ESTOQUE_ATENCAO_DIAS, ESTOQUE_CRITICO_DIAS, ESTOQUE_COBERTURA_DIAS, CONTAGEM_LEMBRETE_DIAS, PLANO_AVISO_DIAS, ALERTAS } from '../config.js';
 import { icone } from '../icons.js';
 import { pedirTexto } from '../dialogo.js';
-import { pizza, COR_FASE, ORDEM_FASE, COR_RACAO } from '../graficos.js';
+import { pizza, COR_FASE, ORDEM_FASE, COR_RACAO, corRacao } from '../graficos.js';
 import { metaDe, metasDe, htmlPrevisao } from './despesca.js';
 import { pintarTempo } from './tempo.js';
 import { dadosDoDia, situacaoTanque, formatosSaco, ordemNatural, statusTanque } from './dia.js';
@@ -54,6 +54,10 @@ export async function renderHome(ctx, el) {
   const { hoje, resumo, semDetalhe, numerosGuardados, saldos, racao, mortes, porTanque, porDia, dias14 } = D;
   const agua = D.agua || [];
   // a ração de alevino só aparece na Início quando a fazenda usa (tem saldo, compra ou consumo)
+  // nome e cor de cada linha do estoque: as rações cadastradas (sql/39) ou engorda e alevino
+  const porRacao = !!(saldos && saldos.porRacao);
+  const nomeL = (s) => (porRacao ? s.nome : s.tipo_racao === 'alevino' ? 'Alevino' : 'Engorda');
+  const corL = (s) => (porRacao ? corRacao(s.cor) : COR_RACAO[s.tipo_racao === 'alevino' ? 'alevino' : 'engorda']);
   const usadas = saldos ? saldos.linhas.filter((s, i) => i === 0 || ['total_comprado_kg', 'total_consumido_kg', 'saldo_kg'].some((k) => Number(s[k]))) : [];
   // lembrete de contagem: a ração em uso há mais tempo sem contar
   const paraContar = usadas.filter((s) => Number(s.consumo_7d_kg) > 0).sort((a, b) => String(a.ultima_contagem || '').localeCompare(String(b.ultima_contagem || '')))[0] || usadas[0] || null;
@@ -165,7 +169,7 @@ export async function renderHome(ctx, el) {
       const algumNeg = usadas.some((x) => Number(x.saldo_kg) < 0);
       const sit = situacaoEstoque(Number(usadas[0].saldo_kg) || 0, consumo7d(usadas[0]), ESTOQUE_ATENCAO_DIAS, ESTOQUE_CRITICO_DIAS);
       const tom = { atencao: 'alerta', critico: 'erro', negativo: 'erro' }[sit.nivel] || '';
-      ns.push(`<a class="num${tom ? ` ${tom}` : ''}" href="#/estoque"><span>Ração dura</span>${algumNeg ? '<b>0<small> dias</small></b><small>falta registrar compra</small>' : sit.dias != null ? `<b>${fmtInt(Math.floor(sit.dias))}<small> ${Math.floor(sit.dias) === 1 ? 'dia' : 'dias'}</small></b><small>${usadas.length > 1 ? 'engorda' : 'no galpão'}${peloDeHoje(usadas[0]) ? ', ritmo de hoje' : ''}</small>` : '<b>—</b><small>sem consumo</small>'}</a>`);
+      ns.push(`<a class="num${tom ? ` ${tom}` : ''}" href="#/estoque"><span>Ração dura</span>${algumNeg ? '<b>0<small> dias</small></b><small>falta registrar compra</small>' : sit.dias != null ? `<b>${fmtInt(Math.floor(sit.dias))}<small> ${Math.floor(sit.dias) === 1 ? 'dia' : 'dias'}</small></b><small>${porRacao && usadas.length > 1 ? esc(usadas[0].nome) : usadas.length > 1 ? 'engorda' : 'no galpão'}${peloDeHoje(usadas[0]) ? ', ritmo de hoje' : ''}</small>` : '<b>—</b><small>sem consumo</small>'}</a>`);
     }
     if (mortes) {
       const ativos = new Set(lotes.map((l) => l.id));
@@ -259,13 +263,13 @@ export async function renderHome(ctx, el) {
 
   function blocoEstoque() {
     if (!usadas.length) return '';
-    const duas = saldos.porTipo && usadas.length > 1;
+    const duas = (saldos.porTipo || porRacao) && usadas.length > 1;
     const temDias = racao && dias14.some((d) => porDia[d] > 0);
     return `<section class="h-bloco" aria-labelledby="h-est">
       <header><h2 id="h-est"><a href="#/estoque" style="color:inherit;text-decoration:none">Estoque de ração</a></h2><span class="h-meta">no galpão</span></header>
-      ${duas ? pizza(usadas.map((s) => ({ nome: s.tipo_racao === 'alevino' ? 'Alevino' : 'Engorda', valor: Math.max(0, sacos(Number(s.saldo_kg) || 0)), cor: COR_RACAO[s.tipo_racao === 'alevino' ? 'alevino' : 'engorda'], txt: nSacos(Math.max(0, sacos(Number(s.saldo_kg) || 0))) })), { centro: fmtNum(usadas.reduce((a, s) => a + Math.max(0, sacos(Number(s.saldo_kg) || 0)), 0), 0), sub: 'sacos', rotulo: 'Estoque de ração por tipo' }) : ''}
-      ${usadas.map((s) => linhaEstoque(s, duas ? (s.tipo_racao === 'alevino' ? 'Alevino' : 'Engorda') : 'Ração')).join('')}
-      ${temDias ? `<div class="h-graf">${barras14()}</div><p class="h-graf-leg">Sacos dados por dia nos últimos 14 dias${duas ? ', somando as duas rações' : ''}. Hoje, em verde, ainda em andamento.</p>` : ''}
+      ${duas ? pizza(usadas.map((s) => ({ nome: nomeL(s), valor: Math.max(0, sacos(Number(s.saldo_kg) || 0)), cor: corL(s), txt: nSacos(Math.max(0, sacos(Number(s.saldo_kg) || 0))) })), { centro: fmtNum(usadas.reduce((a, s) => a + Math.max(0, sacos(Number(s.saldo_kg) || 0)), 0), 0), sub: 'sacos', rotulo: 'Estoque de ração por tipo' }) : ''}
+      ${usadas.map((s) => linhaEstoque(s, duas ? nomeL(s) : porRacao ? s.nome : 'Ração')).join('')}
+      ${temDias ? `<div class="h-graf">${barras14()}</div><p class="h-graf-leg">Sacos dados por dia nos últimos 14 dias${duas ? `, somando as ${usadas.length > 2 ? 'rações' : 'duas rações'}` : ''}. Hoje, em verde, ainda em andamento.</p>` : ''}
     </section>`;
   }
 

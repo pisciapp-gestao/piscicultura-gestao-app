@@ -787,7 +787,7 @@ body.sem-rolagem { overflow: hidden; }
 .cascata > :is(.pc-duas, .tanque-card), .cascata > .pc-duas > *, .cascata > .pc-duas > * > .passos { animation: none; }
 .cascata > .pc-duas > * > *, .cascata .passos > * { --b: 70ms; }
 .cascata > .tanque-card ~ * { --b: 105ms; }
-.cascata.troca-aba > :is(h1, .seg) { animation: none; } /* Lançar, troca de aba: o topo fica parado */
+.cascata.troca-aba > :is(h1, .seg, .rc-est) { animation: none; } /* Lançar, troca de aba: o topo fica parado */
 .cascata.troca-aba > .pc-duas > * > *, .cascata.troca-aba .passos > * { --b: 0ms; } /* a lista de baixo do tanque entra depois do cartão */
 :is(.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > *):nth-child(2) { --d: 35ms; }
 :is(.cascata > *, .cascata > .pc-duas > * > *, .cascata > .tanque-card > *, .cascata .passos > *):nth-child(3) { --d: 70ms; }
@@ -1476,3 +1476,59 @@ details.fechando[open] > summary::after { transform: rotate(45deg) translateY(-2
 .ra-agora { background: var(--card); box-shadow: inset 0 0 0 1px var(--linha); }
 .ra-agora > b { font-size: 1.25rem; padding-top: .15rem; }
 .ra-tile > small { font-size: .78rem; color: var(--tinta-2); line-height: 1.35; }
+
+/* ---------- Rações da fazenda (sql/39): cadastro, estoque por ração e a escolha no trato ---------- */
+.rc-cor { display: inline-block; width: 12px; height: 12px; border-radius: 3px; flex: none; background: var(--cor, var(--rio)); }
+.rc-lista .rc-lin { display: flex; align-items: center; gap: .75rem; padding: .7rem 0; border-top: 1px solid var(--linha-2); }
+.rc-lista .rc-lin:first-child { border-top: 0; }
+.rc-lista .rc-lin .esq { flex: 1; min-width: 0; }
+.rc-lista .rc-lin .esq b { display: block; font-family: var(--fonte-titulo); font-weight: 600; overflow-wrap: anywhere; }
+.rc-lista .rc-lin.parada { opacity: .6; }
+.rc-vazio p { margin-top: 0; }
+.rc-passos { margin: 0 0 1rem; padding-left: 1.2rem; color: var(--tinta-2); }
+.rc-passos li { margin: .25rem 0; }
+.rc-vazio .btn { width: 100%; margin-bottom: .4rem; }
+.rc-fs { border: 0; padding: 0; margin: .9rem 0 0; min-width: 0; }
+.rc-fs legend { padding: 0; margin-bottom: .35rem; font-weight: 500; }
+.rc-fs .seg { margin-bottom: 0; }
+.rc-cores { display: grid; grid-template-columns: repeat(5, 1fr); gap: .5rem; max-width: 320px; }
+.rc-cor-bt { aspect-ratio: 1; min-height: 44px; border-radius: 8px; border: 0; cursor: pointer; position: relative; }
+.rc-cor-bt.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--tinta); }
+.rc-cor-bt.on::after { content: "✓"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 1.1rem; }
+.rc-form .btn.grande { margin-top: 1rem; }
+
+/* estoque: uma linha por ração; a escolhida fica marcada */
+.rc-est { padding: .35rem; }
+.rc-est-l { display: grid; grid-template-columns: 1fr auto; gap: .2rem .75rem; width: 100%; text-align: left; background: none; border: 0; border-radius: 6px;
+  padding: .7rem .65rem; font: inherit; color: inherit; cursor: pointer; transition: background-color .15s ease; }
+.rc-est-l + .rc-est-l { border-top: 1px solid var(--linha-2); }
+.rc-est-l.on { background: var(--rio-claro); box-shadow: inset 3px 0 0 var(--cor); }
+.rc-est-n { display: flex; align-items: center; gap: .55rem; font-family: var(--fonte-titulo); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.rc-est-n .rc-cor { background: var(--cor); }
+.rc-est-l > b { font-family: var(--fonte-titulo); font-size: 1.05rem; text-align: right; white-space: nowrap; }
+.rc-est-l > b small { font: 400 .8rem var(--fonte); color: var(--tinta-2); }
+.rc-trilho { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--moldura); overflow: hidden; }
+.rc-trilho i { display: block; height: 100%; border-radius: 3px; background: var(--cor); }
+.rc-est-i { grid-column: 1 / -1; color: var(--tinta-2); font-size: .82rem; }
+.rc-est-i.al { color: var(--alerta); font-weight: 600; }
+
+/* lançar: a ração em botões grandes, cada um com a cor da ração (escolha obrigatória) */
+.rc-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.rc-tile { position: relative; text-align: left; border: 1.5px solid var(--controle); border-radius: 8px; background: var(--card); color: var(--tinta);
+  padding: .65rem .7rem .6rem 1rem; min-height: 64px; font: inherit; cursor: pointer; overflow: hidden;
+  transition: border-color .15s ease, background-color .15s ease, transform .12s var(--ease); }
+.rc-tile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--cor); }
+.rc-tile b { display: block; font-family: var(--fonte-titulo); font-weight: 700; font-size: 1rem; line-height: 1.2; overflow-wrap: anywhere; }
+.rc-tile small { display: block; color: var(--tinta-2); font-size: .8rem; margin-top: .15rem; }
+.rc-tile.on { background: var(--cor); border-color: var(--cor); color: #fff; }
+.rc-tile.on small { color: rgba(255, 255, 255, .88); }
+.rc-tile.on::after { content: "✓"; position: absolute; top: .45rem; right: .6rem; font-weight: 700; }
+.rc-tile.zero:not(.on) { opacity: .55; }
+.rc-tile:active { transform: scale(.97); }
+.rc-escolha.falta .rc-tiles { animation: rc-falta .32s var(--ease); }
+.rc-escolha .erro { margin: .5rem 0 0; }
+@keyframes rc-falta { 0%, 100% { transform: none; } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+@media (prefers-reduced-motion: reduce) { .rc-escolha.falta .rc-tiles { animation: none; } .rc-tile:active { transform: none; } }
+.rc-tag { display: inline-block; margin-top: .3rem; font-style: normal; font-size: .72rem; font-weight: 600; letter-spacing: .01em;
+  color: var(--cor); border: 1px solid var(--cor); border-radius: 4px; padding: 0 .35rem; background: var(--card); }
+.rc-tile.on .rc-tag { color: #fff; border-color: rgba(255, 255, 255, .7); background: transparent; }
