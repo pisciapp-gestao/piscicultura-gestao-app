@@ -1,7 +1,7 @@
 // Estoque de ração: saldo (todos veem, só em kg) e compras (dono/gerente veem e lançam custo).
 import { confirmar, formulario } from '../dialogo.js';
 import { esc, fmtData, fmtNum, fmtInt, fmtBRL, hojeISO, num, numMoeda, moedaCampo, progresso } from '../util.js';
-import { pizza, COR_RACAO } from '../graficos.js';
+import { pizza, COR_RACAO, corRacao } from '../graficos.js';
 import { PESO_SACO_PADRAO_KG } from '../config.js';
 
 import { situacaoEstoque, sugestaoCompraKg } from '../calc.js';
@@ -19,6 +19,8 @@ const MENSAGEM = {
 // Duas rações em estoques separados (sql/17): engorda e alevino. A aba escolhida vale para a tela toda.
 const NOME_RACAO = { engorda: 'ração de engorda', alevino: 'ração de alevino' };
 let tipoAtual = 'engorda';
+// compra ou correção de uma ração cadastrada: grava a ração e também o tipo antigo (alevino ou engorda), que o banco ainda pede
+const camposRacao = (r) => ({ racao_id: r.racao_id, tipo_racao: r.fase === 'alevino' ? 'alevino' : 'engorda' });
 
 // troca: {de} quando trocou de aba (Engorda ↔ Alevino): a tela antiga fica até a nova chegar, o título e as abas
 // ficam parados (o risquinho desliza) e só os balões de baixo entram em cascata
@@ -32,14 +34,19 @@ export async function renderEstoque(ctx, el, troca = null) {
     ctx.api.saldosRacao(), ctx.api.compras(gerir),
     gerir ? ctx.api.contagens().catch(() => []) : Promise.resolve([]),
   ]);
-  const porTipo = saldos.porTipo;
-  // consumo por ração só quando o banco já separa as duas (sql/17); antes disso, o total
+  // fazenda com rações cadastradas (sql/39): uma "aba" por ração, numa lista com o saldo de cada uma
+  const porRacao = !!saldos.porRacao;
+  const visiveis = porRacao ? saldos.racoes.filter((x) => x.ativa || Number(x.saldo_kg)) : [];
+  if (porRacao && !visiveis.some((x) => x.tipo_racao === tipoAtual)) tipoAtual = (visiveis[0] || saldos.racoes[0]).tipo_racao;
+  if (!porRacao && String(tipoAtual).startsWith('r:')) tipoAtual = 'engorda';
+  const porTipo = saldos.porTipo || porRacao;
+  // consumo por ração só quando o banco já separa (sql/17 ou sql/39); antes disso, o total
   const consumo = await ctx.api.consumoDiario(30, porTipo ? tipoAtual : null).catch(() => []);
   if (!porTipo) tipoAtual = 'engorda';
-  const doTipo = (x) => !porTipo || (x.tipo_racao || 'engorda') === tipoAtual;
-  const saldo = saldos.linhas.find((x) => x.tipo_racao === tipoAtual) || saldos.linhas[0];
+  const doTipo = (x) => !porTipo || (porRacao ? `r:${x.racao_id}` : (x.tipo_racao || 'engorda')) === tipoAtual;
+  const saldo = (porRacao ? saldos.racoes : saldos.linhas).find((x) => x.tipo_racao === tipoAtual) || saldos.linhas[0];
   const compras = todasCompras.filter(doTipo), contagens = todasContagens.filter(doTipo);
-  const nomeR = porTipo ? NOME_RACAO[tipoAtual] : 'ração';
+  const nomeR = porRacao ? `ração ${saldo.nome}` : porTipo ? NOME_RACAO[tipoAtual] : 'ração';
   const comprado = Number(saldo?.total_comprado_kg || 0);
   const consumido = Number(saldo?.total_consumido_kg || 0);
   const ajustes = Number(saldo?.total_ajustes_kg || 0);
@@ -62,24 +69,44 @@ export async function renderEstoque(ctx, el, troca = null) {
   const totSaidas = Math.abs(extrato.filter((x) => x.kg < 0).reduce((t, x) => t + x.kg, 0)); // abs: evita "-0" quando não houve saída
   const sinal = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${sc(Math.abs(v))}`;
 
+  // lista das rações (sql/39): cor, sacos, quanto dura; tocar escolhe a ração da tela
+  function listaRacoes() {
+    return `<div class="card rc-est" role="tablist" aria-label="Rações">${visiveis.map((x) => {
+      const v = Number(x.saldo_kg) || 0;
+      const st = situacaoEstoque(v, x.consumo_7d_kg, ESTOQUE_ATENCAO_DIAS, ESTOQUE_CRITICO_DIAS);
+      const info = v < 0 ? 'faltou registrar compra'
+        : !x.ultima_contagem && !Number(x.total_comprado_kg) ? 'ainda não contada no galpão'
+        : v <= 0 ? 'sem estoque'
+        : st.dias != null ? `gasta ~${sc(st.porDia)} ${sc(st.porDia) === '1' ? 'saco' : 'sacos'} por dia · ${st.nivel === 'ok' ? 'dura cerca de' : 'acaba em'} ${fmtInt(Math.floor(st.dias))} ${Math.floor(st.dias) === 1 ? 'dia' : 'dias'}`
+        : 'sem trato nos últimos 7 dias';
+      const alerta = v < 0 || ['atencao', 'critico'].includes(st.nivel);
+      return `<button type="button" role="tab" aria-selected="${x.tipo_racao === tipoAtual}" class="rc-est-l${x.tipo_racao === tipoAtual ? ' on' : ''}" data-tipo-racao="${esc(x.tipo_racao)}" style="--cor:${corRacao(x.cor)}">
+        <span class="rc-est-n"><i class="rc-cor" aria-hidden="true"></i>${esc(x.nome)}</span><b>${sc(Math.max(0, v), 0)} <small>${sc(Math.max(0, v), 0) === '1' ? 'saco' : 'sacos'}</small></b>
+        <span class="rc-trilho" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, ((st.dias || 0) / ESTOQUE_COBERTURA_DIAS) * 100)).toFixed(1)}%"></i></span>
+        <small class="rc-est-i${alerta ? ' al' : ''}">${info}</small></button>`;
+    }).join('')}</div>`;
+  }
   if (troca) { el.classList.add('cascata', 'troca-aba'); setTimeout(() => el.classList.remove('cascata', 'troca-aba'), 600); }
   el.innerHTML = `
     <h1>Estoque de ração</h1>
-    ${porTipo ? `<div class="seg" style="--n:2" role="tablist">${Object.entries(NOME_RACAO).map(([k]) => `<button type="button" data-tipo-racao="${k}" class="${k === tipoAtual ? 'on' : ''}">${k === 'engorda' ? 'Engorda' : 'Alevino'} <small>${((v) => `${sc(Math.max(0, v), 0)} ${Math.max(0, v / kgS) === 1 ? 'saco' : 'sacos'}`)(Number((saldos.linhas.find((x) => x.tipo_racao === k) || {}).saldo_kg || 0))}</small></button>`).join('')}</div>` : ''}
+    ${porRacao ? listaRacoes() : ''}
+    ${porTipo && !porRacao ? `<div class="seg" style="--n:2" role="tablist">${Object.entries(NOME_RACAO).map(([k]) => `<button type="button" data-tipo-racao="${k}" class="${k === tipoAtual ? 'on' : ''}">${k === 'engorda' ? 'Engorda' : 'Alevino'} <small>${((v) => `${sc(Math.max(0, v), 0)} ${Math.max(0, v / kgS) === 1 ? 'saco' : 'sacos'}`)(Number((saldos.linhas.find((x) => x.tipo_racao === k) || {}).saldo_kg || 0))}</small></button>`).join('')}</div>` : ''}
     <div class="pc-duas"><div>
     <div class="estoque-hero n-${sit.nivel}">
-      <span>${porTipo ? `Ração de ${tipoAtual} em estoque` : 'Em estoque agora'}</span>
+      <span>${porRacao ? `${esc(saldo.nome)} em estoque` : porTipo ? `Ração de ${tipoAtual} em estoque` : 'Em estoque agora'}</span>
       <b>${sc(Math.max(0, kg), 0)}<em>${sc(Math.max(0, kg), 0) === '1' ? 'saco' : 'sacos'}</em></b>
       <small>${kg < 0 ? `faltou registrar a compra de ${sc(Math.abs(kg), 0)} ${sc(Math.abs(kg), 0) === '1' ? 'saco' : 'sacos'} (${fmtNum(Math.abs(kg), 0)} kg)` : `${fmtNum(kg, 0)} kg`}${sit.dias != null ? ` · dura cerca de <strong>${fmtInt(Math.floor(sit.dias))} dias</strong>` : ''}</small>
       ${sit.porDia > 0 ? `<small>Gasta ~${sc(sit.porDia)} ${sc(sit.porDia) === '1' ? 'saco' : 'sacos'} por dia (${peloDeHoje ? 'pelo que foi dado hoje' : 'média dos últimos 7 dias'})</small>` : ''}
       ${sit.dias != null || sit.nivel === 'negativo' ? `<div class="hero-prog">${progresso(((sit.dias || 0) / ESTOQUE_COBERTURA_DIAS) * 100, { tom: { atencao: 'alerta', critico: 'erro', negativo: 'erro' }[sit.nivel] || '', rotulo: `Ração para ${fmtInt(Math.floor(sit.dias || 0))} de ${ESTOQUE_COBERTURA_DIAS} dias` })}<p class="h-trilho-leg"><span>${fmtInt(Math.floor(sit.dias || 0))} de ${ESTOQUE_COBERTURA_DIAS} dias de ração${peloDeHoje ? ' (no ritmo de hoje)' : ''}</span><span>meta: ${ESTOQUE_COBERTURA_DIAS} dias</span></p></div>` : ''}
       ${sit.nivel === 'ok' ? '' : `<p>${MENSAGEM[sit.nivel]}</p>`}
     </div>
-    ${porTipo && saldos.linhas.length > 1 ? `<div class="card">${pizza(saldos.linhas.map((x) => { const v = Math.max(0, Number(x.saldo_kg || 0)) / kgS; return { nome: x.tipo_racao === 'alevino' ? 'Alevino' : 'Engorda', valor: v, cor: COR_RACAO[x.tipo_racao === 'alevino' ? 'alevino' : 'engorda'], txt: `${fmtNum(v, 0)} sacos` }; }), { centro: fmtNum(saldos.linhas.reduce((a, x) => a + Math.max(0, Number(x.saldo_kg || 0)), 0) / kgS, 0), sub: 'sacos', rotulo: 'Estoque por tipo de ração' })}</div>` : ''}
+    ${porTipo && !porRacao && saldos.linhas.length > 1 ? `<div class="card">${pizza(saldos.linhas.map((x) => { const v = Math.max(0, Number(x.saldo_kg || 0)) / kgS; return { nome: x.tipo_racao === 'alevino' ? 'Alevino' : 'Engorda', valor: v, cor: COR_RACAO[x.tipo_racao === 'alevino' ? 'alevino' : 'engorda'], txt: `${fmtNum(v, 0)} sacos` }; }), { centro: fmtNum(saldos.linhas.reduce((a, x) => a + Math.max(0, Number(x.saldo_kg || 0)), 0) / kgS, 0), sub: 'sacos', rotulo: 'Estoque por tipo de ração' })}</div>` : ''}
     ${!navigator.onLine ? '<p class="aviso">Sem internet: os valores podem estar desatualizados.</p>' : ''}
     ${gerir && sugKg > 0 ? `<p class="aviso" id="sugestao-compra">Sugestão de compra: <b>~${fmtInt(Math.ceil(sugKg / kgS))} sacos</b> para a ração durar ${ESTOQUE_COBERTURA_DIAS} dias no ritmo atual.</p>` : ''}
     ${gerir && diasSemContar != null && diasSemContar >= CONTAGEM_LEMBRETE_DIAS ? `<p class="aviso" id="lembrete-contagem">A última contagem foi há ${fmtInt(diasSemContar)} dias. Contar toda semana deixa o saldo confiável.</p>` : ''}
-    ${gerir ? (ult
+    ${gerir && !porRacao ? '<p class="mudo pequeno">Quer saber quanto tem de cada ração (45%, 32%, 28%...)? Cadastre em <a href="#/racoes">Fazenda › Rações</a>.</p>' : ''}
+    ${gerir && porRacao ? `<p class="mudo pequeno"><a href="#/racoes">Mudar a lista de rações</a></p>` : ''}
+    ${gerir && porRacao && !ult && !comprado ? `<p class="aviso">Conte os sacos de <b>${esc(saldo.nome)}</b> no galpão (abaixo): essa contagem é o começo do estoque desta ração.</p>` : gerir ? (ult
       ? `<p class="mudo">Última contagem: ${fmtData(ult.data)} · ${Number(ult.diferenca_kg) === 0 ? 'bateu certinho' : `${Number(ult.diferenca_kg) < 0 ? 'faltaram' : 'sobraram'} ${sc(Math.abs(ult.diferenca_kg))} sacos`}</p>`
       : '<p class="aviso">Ainda não houve contagem. Não precisa contar tudo: conte por pilhas (camadas × sacos) ou espere o estoque ficar baixo, quando contar é rápido. É a contagem que deixa o saldo confiável.</p>') : ''}
 
@@ -167,6 +194,7 @@ export async function renderEstoque(ctx, el, troca = null) {
     </div></div>`;
 
   el.querySelectorAll('[data-tipo-racao]').forEach((b) => b.addEventListener('click', () => {
+    if (porRacao) { if (b.dataset.tipoRacao !== tipoAtual) { tipoAtual = b.dataset.tipoRacao; renderEstoque(ctx, el, { de: -1 }); } return; }
     if (b.dataset.tipoRacao === tipoAtual) return;
     const de = [...el.querySelectorAll('[data-tipo-racao]')].findIndex((x) => x.dataset.tipoRacao === tipoAtual);
     tipoAtual = b.dataset.tipoRacao; renderEstoque(ctx, el, { de });
@@ -287,7 +315,7 @@ Faltaram ${fmtNum(nota - rec, (nota - rec) % 1 ? 1 : 0)} ${nota - rec === 1 ? 's
       await ctx.api.registrarCompra({
         fazenda_id: ctx.state.perfil.fazenda_id, data_compra: f.querySelector('#data').value, quantidade_kg: t,
         custo_total: custo, fornecedor: f.querySelector('#forn').value.trim() || null,
-        sacos_nota: s, sacos_recebidos: recebidos(), ...(porTipo ? { tipo_racao: tipoAtual } : {}),
+        sacos_nota: s, sacos_recebidos: recebidos(), ...(porRacao ? camposRacao(saldo) : porTipo ? { tipo_racao: tipoAtual } : {}),
       });
       ctx.toast('Entrada registrada', 'ok');
       renderEstoque(ctx, el);
@@ -315,13 +343,14 @@ Faltaram ${fmtNum(nota - rec, (nota - rec) % 1 ? 1 : 0)} ${nota - rec === 1 ? 's
           { nome: 'sacos', rotulo: `Quantidade (sacos de ${fmtNum(kgS, 0)} kg)`, tipo: 'number', valor: Math.round((Number(c.quantidade_kg) / kgS) * 100) / 100, step: '0.5', min: '0.5', inputmode: 'decimal', ajuda: `Hoje: ${fmtNum(Number(c.quantidade_kg), 0)} kg.` },
           ...(!ctx.verDinheiro() ? [] : [{ nome: 'custo', rotulo: 'Valor pago (opcional)', tipo: 'text', valor: moedaCampo(c.custo_total), prefixo: 'R$', inputmode: 'decimal', maxlength: '16', placeholder: 'Ex.: 3.940,00' }]),
           { nome: 'forn', rotulo: 'Fornecedor (opcional)', tipo: 'text', valor: c.fornecedor || '', maxlength: '80' },
-          ...(porTipo ? [{ nome: 'tipo', rotulo: 'Qual ração', tipo: 'select', valor: c.tipo_racao || 'engorda', opcoes: [['engorda', 'Ração de engorda'], ['alevino', 'Ração de alevino']] }] : []),
+          ...(porRacao ? [{ nome: 'tipo', rotulo: 'Qual ração', tipo: 'select', valor: c.racao_id, opcoes: saldos.racoes.filter((x) => x.ativa || x.racao_id === c.racao_id).map((x) => [x.racao_id, x.nome]) }]
+            : porTipo ? [{ nome: 'tipo', rotulo: 'Qual ração', tipo: 'select', valor: c.tipo_racao || 'engorda', opcoes: [['engorda', 'Ração de engorda'], ['alevino', 'Ração de alevino']] }] : []),
         ],
         validar: (x) => (!x.data ? 'Informe a data.' : x.data > hoje ? 'A data não pode ser no futuro.' : !(num(x.sacos) > 0) ? 'Informe a quantidade de sacos.' : x.custo != null && String(x.custo).trim() !== '' && !(numMoeda(x.custo) >= 0 && numMoeda(x.custo) < 100000000) ? 'Confira o valor pago. Ex.: 3.940,00' : null),
       });
       if (!v) return;
       try {
-        await ctx.api.atualizar('racao_estoque', c.id, { data_compra: v.data, quantidade_kg: Math.round(num(v.sacos) * kgS * 100) / 100, ...(v.custo === undefined ? {} : { custo_total: String(v.custo).trim() === '' ? null : numMoeda(v.custo) }), fornecedor: v.forn.trim() || null, ...(porTipo ? { tipo_racao: v.tipo } : {}) });
+        await ctx.api.atualizar('racao_estoque', c.id, { data_compra: v.data, quantidade_kg: Math.round(num(v.sacos) * kgS * 100) / 100, ...(v.custo === undefined ? {} : { custo_total: String(v.custo).trim() === '' ? null : numMoeda(v.custo) }), fornecedor: v.forn.trim() || null, ...(porRacao ? camposRacao(saldos.racoes.find((x) => x.racao_id === v.tipo) || saldo) : porTipo ? { tipo_racao: v.tipo } : {}) });
         ctx.toast('Entrada corrigida', 'ok'); renderEstoque(ctx, el);
       } catch (e) { ctx.toast(e.message, 'erro'); }
     }));
