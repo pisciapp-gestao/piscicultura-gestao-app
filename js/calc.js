@@ -514,8 +514,10 @@ export function racaoCertaAgora(pmKg, tabela = TABELA_ALIMENTAR) {
 // Quanto falta de ração até o peso de venda (ou de passar de fase).
 // Pela tabela, para os peixes vivos, ajustada pelo que este lote gastou de verdade em relação à tabela até agora
 // (fator: 1,25 = gastou 25% a mais que a tabela; só com crescimento medido, entre 0,7 e 2).
-// lote, r: linha do resumo_lotes; alvoKg: peso de venda; racaoRealKg: ração dada neste lote.
-export function previsaoRacao(lote, r, alvoKg) {
+// Com a conversão alimentar informada pela fazenda (sql/41), a conta é a do manejo: peixes vivos × kg que cada um
+// ainda vai ganhar × conversão (kg de ração por kg de peixe ganho). A tabela continua dizendo qual ração dar agora.
+// lote, r: linha do resumo_lotes; alvoKg: peso de venda; conversao: kg de ração por kg ganho (null = pela tabela).
+export function previsaoRacao(lote, r, alvoKg, conversao = null) {
   const qi = Number(lote.quantidade_inicial) || 0;
   const pmIni = qi > 0 ? Number(lote.peso_inicial_kg) / qi : null;
   const pm = r && r.ultimo_peso_medio_kg != null ? Number(r.ultimo_peso_medio_kg) : pmIni;
@@ -524,6 +526,8 @@ export function previsaoRacao(lote, r, alvoKg) {
   const agora = racaoCertaAgora(pm);
   if (pm >= alvoKg || !(vivos > 0)) return { pronto: pm >= alvoKg, faltaKg: 0, tabelaKg: 0, fator: null, agora, vivos, pmKg: pm, alvoKg };
   const tabelaKg = racaoTabelaPorPeixe(pm, alvoKg) * vivos;
+  const ca = Number(conversao);
+  if (ca > 0) return { pronto: false, faltaKg: vivos * (alvoKg - pm) * ca, tabelaKg, fator: null, conversao: ca, agora, vivos, pmKg: pm, alvoKg };
   let fator = null;
   const real = Number(r && r.racao_kg) || 0;
   if (pmIni > 0 && pm > pmIni * 1.2 && real > 0) {

@@ -82,6 +82,18 @@ export function criarApi(client) {
     async salvarPesoVendaTanque(tanqueId, kg) {
       ok(await client.from('tanques').update({ peso_venda_kg: kg }).eq('id', tanqueId));
     },
+    // conversão alimentar da fazenda (sql/41); null se não definida ou se o sql/41 ainda não rodou
+    async conversao() {
+      const { data, error } = await client.from('fazendas').select('conversao_alimentar').maybeSingle();
+      if (error || !data || !(Number(data.conversao_alimentar) > 0)) return null;
+      return Number(data.conversao_alimentar);
+    },
+    async salvarConversao(fazendaId, ca) {
+      ok(await client.from('fazendas').update({ conversao_alimentar: ca }).eq('id', fazendaId));
+    },
+    async salvarConversaoTanque(tanqueId, ca) {
+      ok(await client.from('tanques').update({ conversao_alimentar: ca }).eq('id', tanqueId));
+    },
     async salvarKgSaco(fazendaId, kg) {
       ok(await client.from('fazendas').update({ kg_saco: kg }).eq('id', fazendaId));
     },
@@ -108,7 +120,10 @@ export function criarApi(client) {
     },
     async tanques() {
       // area_ha vem do sql/17; sem ele, lê só o nome
-      // peso_venda_kg vem do sql/38; sem ele, lê sem essa coluna
+      // peso_venda_kg vem do sql/38; sem ele, lê sem essa coluna. conversao_alimentar vem do sql/41.
+      const r0 = await client.from('tanques').select('id,nome,area_ha,peso_venda_kg,conversao_alimentar').order('nome');
+      if (!r0.error) return r0.data;
+      if (ehErroDeRede(r0.error)) throw new ErroApi(r0.error);
       const r = await client.from('tanques').select('id,nome,area_ha,peso_venda_kg').order('nome');
       if (r.error && /peso_venda_kg/i.test(r.error.message || '')) {
         const r2 = await client.from('tanques').select('id,nome,area_ha').order('nome');
