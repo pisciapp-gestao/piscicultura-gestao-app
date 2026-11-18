@@ -92,8 +92,8 @@ async function carregarRefLocal() {
 async function atualizarRef() {
   if (!navigator.onLine || !state.user || !api) return false;
   try {
-    const [tanques, lotes, kgSaco, logo, precoKg, pesoVenda] = await Promise.all([api.tanques(), api.lotes({ apenasAtivos: true }), api.kgSaco().catch(() => null), api.logo().catch(() => undefined), api.precoKg().catch(() => null), api.pesoVenda().catch(() => null)]);
-    state.ref = { tanques, lotes, kgSaco: kgSaco || (state.ref && state.ref.kgSaco) || null, logo: logo === undefined ? (state.ref && state.ref.logo) || null : logo, precoKg, pesoVenda, userId: state.perfil.id, fazendaId: state.perfil.fazenda_id, atualizado_em: new Date().toISOString() };
+    const [tanques, lotes, kgSaco, logo, precoKg, pesoVenda, conversao] = await Promise.all([api.tanques(), api.lotes({ apenasAtivos: true }), api.kgSaco().catch(() => null), api.logo().catch(() => undefined), api.precoKg().catch(() => null), api.pesoVenda().catch(() => null), api.conversao().catch(() => null)]);
+    state.ref = { tanques, lotes, kgSaco: kgSaco || (state.ref && state.ref.kgSaco) || null, logo: logo === undefined ? (state.ref && state.ref.logo) || null : logo, precoKg, pesoVenda, conversao, userId: state.perfil.id, fazendaId: state.perfil.fazenda_id, atualizado_em: new Date().toISOString() };
     await db.kvSet('ref', state.ref);
     atualizarMarca();
     state.semRede = false;

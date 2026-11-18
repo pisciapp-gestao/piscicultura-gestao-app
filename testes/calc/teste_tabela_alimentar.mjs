@@ -27,4 +27,16 @@ perto(com.fator, 1.25, 'fator', 0.001); perto(com.faltaKg, racaoTabelaPorPeixe(1
 ok('lote gastou 25% a mais que a tabela até aqui: a previsão soma 25%');
 assert.equal(previsaoRacao(lote, { ultimo_peso_medio_kg: 3.6, mortos: 0 }, 3.5).pronto, true);
 ok('já passou do peso de venda: pronto');
+// conversão alimentar informada pela fazenda (sql/41): falta = vivos × (peso de venda − peso atual) × conversão
+const ca = previsaoRacao(lote, { ultimo_peso_medio_kg: 0.8, racao_kg: 0, mortos: 500 }, 2.5, 1.9);
+perto(ca.faltaKg, 9500 * 1.7 * 1.9, 'com conversão'); assert.equal(ca.conversao, 1.9); assert.equal(ca.fator, null);
+perto(ca.tabelaKg, racaoTabelaPorPeixe(0.8, 2.5) * 9500, 'tabela continua calculada para comparar');
+ok('conversão 1,9: 9.500 vivos × 1,7 kg × 1,9 = 30.685 kg (e a tabela ao lado, para comparar)');
+const ca2 = previsaoRacao(lote, { ultimo_peso_medio_kg: 1, racao_kg: esperado * 1.25, mortos: 0 }, 3.5, 2.2);
+perto(ca2.faltaKg, 10000 * 2.5 * 2.2, 'conversão manda'); assert.equal(ca2.fator, null);
+ok('com conversão informada, o ajuste automático pela tabela não se soma (55.000 kg)');
+for (const nada of [null, 0, '', undefined, -1]) assert.equal(previsaoRacao(lote, { ultimo_peso_medio_kg: 0.3, racao_kg: 0, mortos: 0 }, 3.5, nada).conversao, undefined);
+ok('conversão vazia, zero ou inválida: volta para a tabela');
+assert.equal(previsaoRacao(lote, { ultimo_peso_medio_kg: 3.6, mortos: 0 }, 3.5, 1.9).pronto, true);
+ok('com conversão, peixe já no peso: pronto, nada a prever');
 console.log('RESULTADO: TUDO OK');

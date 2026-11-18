@@ -71,6 +71,14 @@ export function renderMais(ctx, el) {
       <button class="btn primario" type="submit">Salvar</button></form></div></details>` : ''}
 
     ${p.papel === 'dono' ? `<details class="card form-dobra">
+      <summary><span><b>Conversão alimentar</b><small>${state.ref.conversao ? `${fmtNum(state.ref.conversao, Math.round(state.ref.conversao * 100) % 10 ? 2 : 1)} kg de ração por kg de peixe` : 'não informada: usa a tabela de alimentação'}</small></span></summary>
+      <div class="form">
+      <small style="display:block">Quantos kg de ração vocês gastam para cada kg de peixe ganho. O app usa para dizer quanto falta de ração até vender: peixes vivos × peso que ainda falta ganhar × conversão. Deixe vazio para usar a tabela de alimentação (conversão 1,6). Cada tanque pode ter a sua (na tela do tanque, em “Conversão”).</small>
+      <form id="f-conv" class="saco-linha"><label class="saco-campo"><span>Conversão</span>
+        <span class="com-sufixo"><input id="conv" type="text" inputmode="decimal" maxlength="5" placeholder="Ex.: 1,9" value="${state.ref.conversao ? String(state.ref.conversao).replace('.', ',') : ''}"><em>kg/kg</em></span></label>
+      <button class="btn primario" type="submit">Salvar</button></form></div></details>` : ''}
+
+    ${p.papel === 'dono' ? `<details class="card form-dobra">
       <summary><span><b>Preço do peixe</b><small>${state.ref.precoKg ? `R$ ${fmtNum(state.ref.precoKg, 2)} por kg` : 'não informado'}</small></span></summary>
       <div class="form">
       <small style="display:block">Usado só para estimar, na tela Início, quanto vale o peixe que está na água.</small>
@@ -155,6 +163,20 @@ export function renderMais(ctx, el) {
       ctx.toast(`Peso de venda: ${fmtNum(kg, kg % 1 ? 1 : 0)} kg por peixe`, 'ok');
       renderMais(ctx, el);
     } catch (e) { ctx.toast(/peso_venda_kg/.test(e.message || '') ? 'Falta rodar o sql/38 no Supabase.' : 'Não salvou: ' + e.message, 'erro'); }
+  });
+  const fc = el.querySelector('#f-conv');
+  if (fc) fc.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const t = fc.querySelector('#conv').value.trim();
+    const ca = t ? Math.round(num(t) * 100) / 100 : null;
+    if (t && !(ca >= 0.5 && ca <= 5)) return ctx.toast('Informe a conversão entre 0,5 e 5 (ex.: 1,9).', 'erro');
+    if (!navigator.onLine) return ctx.toast('Sem internet', 'erro');
+    try {
+      await ctx.api.salvarConversao(state.perfil.fazenda_id, ca);
+      await ctx.atualizarRef(true);
+      ctx.toast(ca ? `Conversão alimentar: ${fmtNum(ca, Math.round(ca * 100) % 10 ? 2 : 1)}` : 'Previsão volta a usar a tabela de alimentação', 'ok');
+      renderMais(ctx, el);
+    } catch (e) { ctx.toast(/conversao_alimentar/.test(e.message || '') ? 'Falta rodar o sql/41 no Supabase.' : 'Não salvou: ' + e.message, 'erro'); }
   });
   const fp = el.querySelector('#f-preco');
   if (fp) fp.addEventListener('submit', async (ev) => {
