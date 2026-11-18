@@ -27,6 +27,7 @@ import { renderRonda } from './views/ronda.js';
 import { renderMeus } from './views/meus.js';
 import { renderPedidos } from './views/pedidos.js';
 import { renderLucro, renderDespesas } from './views/lucro.js';
+import { renderPlacas, renderPlaca } from './views/placas.js';
 import { htmlAtalhos, atualizarLateral, marcarAtalho, pintarAtalhos } from './lateral.js';
 import { registrarRota, linhaVoltar, ehAbaPrincipal } from './voltar.js';
 import { olhoNasSenhas } from './senha.js';
@@ -553,6 +554,8 @@ async function rotear() {
       case 'ronda': await renderRonda(ctx, el); break;
       case 'meus': await renderMeus(ctx, el); break;
       case 'pedidos': await renderPedidos(ctx, el); break;
+      case 'placas': await renderPlacas(ctx, el); break;
+      case 'placa': await renderPlaca(ctx, el, partes[0]); break;
       case 'mais': case 'fazenda': renderMais(ctx, el); break;
       default: await renderHome(ctx, el);
     }

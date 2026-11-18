@@ -82,6 +82,25 @@ export function criarApi(client) {
     async salvarPesoVendaTanque(tanqueId, kg) {
       ok(await client.from('tanques').update({ peso_venda_kg: kg }).eq('id', tanqueId));
     },
+    // placas com QR code (sql/40): só o dono lê e muda
+    async placas() {
+      return ok(await client.from('placas').select('*')) || [];
+    },
+    async salvarPlaca(tanqueId, c = {}) {
+      const d = ok(await client.rpc('placa_salvar', { p_tanque: tanqueId, p_ligada: c.ligada ?? null, p_agua: c.agua ?? null, p_crescimento: c.crescimento ?? null, p_fases: c.fases ?? null, p_whatsapp: c.whatsapp ?? null }));
+      return Array.isArray(d) ? d[0] : d;
+    },
+    async trocarCodigoPlaca(tanqueId) {
+      return ok(await client.rpc('placa_trocar_codigo', { p_tanque: tanqueId }));
+    },
+    async whatsappVisitantes() {
+      const { data, error } = await client.from('fazendas').select('whatsapp_visitantes').maybeSingle();
+      if (error) throw new ErroApi(error);
+      return (data && data.whatsapp_visitantes) || null;
+    },
+    async salvarWhatsappVisitantes(numero) {
+      return ok(await client.rpc('placa_salvar_whatsapp', { p_numero: numero || null }));
+    },
     async salvarKgSaco(fazendaId, kg) {
       ok(await client.from('fazendas').update({ kg_saco: kg }).eq('id', fazendaId));
     },
