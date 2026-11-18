@@ -4,3 +4,5 @@ Bibliotecas de terceiros usadas para gerar e exibir o relatório em PDF:
 - PDF.js 4.10.38, build legacy (Apache-2.0) - https://github.com/mozilla/pdf.js
 
 Three.js (MIT) - https://threejs.org - usado na abertura em 3D (js/splash3d.bundle.js, fonte em tools/splash3d/).
+
+QR Code Generator 1.4.4 (MIT), Kazuhiko Arase - https://github.com/kazuhikoarase/qrcode-generator - usado nas placas com QR code (vendor/qrcode.js).
