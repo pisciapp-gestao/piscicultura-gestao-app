@@ -1,4 +1,4 @@
-# Povoamento em outra data (14/11/26, sql/36), Supabase SIMULADO: o lote mostra os povoamentos, adiciona peixes
+# Povoamento em outra data (14/11/26, sql/39), Supabase SIMULADO: o lote mostra os povoamentos, adiciona peixes
 # com peso por tamanho (5 cm), corrige e exclui. Tanque novo abre direto no povoamento. 'Data de povoamento' no formulário.
 import os
 _AQUI = os.path.dirname(os.path.abspath(__file__))

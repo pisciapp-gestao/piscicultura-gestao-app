@@ -148,8 +148,8 @@ export function criarApi(client) {
     async biometriaInicial(loteId, pesoMedioKg, userId, data) {
       ok(await client.from('biometrias').insert({ id: uuid(), uuid_local: uuid(), lote_id: loteId, data, peso_amostra_kg: Math.round(pesoMedioKg * 1000) / 1000, quantidade_amostrada: 1, registrado_por: userId }));
     },
-    // povoamentos extras do lote (peixes que entraram em outra data, sql/36). O banco soma no lote sozinho.
-    // Sem o sql/36 rodado, responde lista vazia (a tela segue funcionando só com o 1º povoamento).
+    // povoamentos extras do lote (peixes que entraram em outra data, sql/39). O banco soma no lote sozinho.
+    // Sem o sql/39 rodado, responde lista vazia (a tela segue funcionando só com o 1º povoamento).
     async povoamentos(loteIds) {
       if (!loteIds || !loteIds.length) return [];
       const r = await client.from('povoamentos').select('id,lote_id,data,quantidade,peso_total_kg').in('lote_id', loteIds).order('data');
@@ -158,7 +158,7 @@ export function criarApi(client) {
     },
     async adicionarPovoamento(p, userId) {
       const r = await client.from('povoamentos').insert({ id: uuid(), ...p, registrado_por: userId });
-      if (r.error && /povoamentos/i.test(r.error.message || '') && /exist|schema|relation|find/i.test(r.error.message || '')) throw new Error('Povoamento em outra data ainda não foi ativado neste sistema (falta rodar o sql/36 no Supabase).');
+      if (r.error && /povoamentos/i.test(r.error.message || '') && /exist|schema|relation|find/i.test(r.error.message || '')) throw new Error('Povoamento em outra data ainda não foi ativado neste sistema (falta rodar o sql/39 no Supabase).');
       ok(r);
     },
     async corrigirPovoamento(id, campos) {
