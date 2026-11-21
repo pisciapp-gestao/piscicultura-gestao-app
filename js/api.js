@@ -182,6 +182,27 @@ export function criarApi(client) {
     async biometriaInicial(loteId, pesoMedioKg, userId, data) {
       ok(await client.from('biometrias').insert({ id: uuid(), uuid_local: uuid(), lote_id: loteId, data, peso_amostra_kg: Math.round(pesoMedioKg * 1000) / 1000, quantidade_amostrada: 1, registrado_por: userId }));
     },
+    // povoamentos extras do lote (peixes que entraram em outra data, sql/40). O banco soma no lote sozinho.
+    // Sem o sql/40 rodado, responde lista vazia (a tela segue funcionando só com o 1º povoamento).
+    async povoamentos(loteIds) {
+      if (!loteIds || !loteIds.length) return [];
+      const r = await client.from('povoamentos').select('id,lote_id,data,quantidade,peso_total_kg').in('lote_id', loteIds).order('data');
+      if (r.error) return [];
+      return r.data || [];
+    },
+    async adicionarPovoamento(p, userId) {
+      const r = await client.from('povoamentos').insert({ id: uuid(), ...p, registrado_por: userId });
+      if (r.error && /povoamentos/i.test(r.error.message || '') && /exist|schema|relation|find/i.test(r.error.message || '')) throw new Error('Povoamento em outra data ainda não foi ativado neste sistema (falta rodar o sql/40 no Supabase).');
+      ok(r);
+    },
+    async corrigirPovoamento(id, campos) {
+      const d = ok(await client.from('povoamentos').update(campos).eq('id', id).select('id'));
+      if (!d || !d.length) throw new Error('Não foi possível corrigir. Só o dono ou o gerente corrige povoamentos.');
+    },
+    async excluirPovoamento(id) {
+      const d = ok(await client.from('povoamentos').delete().eq('id', id).select('id'));
+      if (!d || !d.length) throw new Error('Não foi possível excluir. Só o dono ou o gerente exclui povoamentos.');
+    },
     // exclusões definitivas (só o dono; o RLS barra os demais). Apagam em cascata os lançamentos.
     async excluirLote(id) {
       const d = ok(await client.from('lotes').delete().eq('id', id).select('id'));
@@ -511,7 +532,7 @@ export function criarApi(client) {
 
     // ----- cópia de segurança (dono): tudo o que a fazenda tem, tabela por tabela -----
     async exportarTudo() {
-      const tabelas = ['fazendas', 'usuarios', 'tanques', 'usuario_tanques', 'lotes', 'biometrias', 'mortalidade', 'despescas', 'despesca_vendas', 'manejos', 'qualidade_agua', 'custos_lote', 'despesas_gerais', 'racoes', 'racao_consumo', 'racao_estoque', 'racao_contagens'];
+      const tabelas = ['fazendas', 'usuarios', 'tanques', 'usuario_tanques', 'lotes', 'povoamentos', 'biometrias', 'mortalidade', 'despescas', 'despesca_vendas', 'manejos', 'qualidade_agua', 'custos_lote', 'despesas_gerais', 'racoes', 'racao_consumo', 'racao_estoque', 'racao_contagens'];
       const out = { gerado_em: new Date().toISOString(), versao: 1, tabelas: {}, sem_acesso: [] };
       for (const t of tabelas) {
         try {
