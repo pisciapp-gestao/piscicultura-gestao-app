@@ -1,7 +1,7 @@
 -- ============================================================
 -- POVOAMENTOS EXTRAS: peixes que entram no MESMO lote em outra data
 -- (ex.: berçário povoado em 10/11 com 50.000 e em 14/11 com mais 30.000).
--- Rode no SQL Editor do Supabase (depois do 01 a 38). Pode rodar de novo sem estragar nada.
+-- Rode no SQL Editor do Supabase (depois do 01 a 39). Pode rodar de novo sem estragar nada.
 --
 -- O 1º povoamento continua no próprio lote (data_entrada, quantidade_inicial, peso_inicial_kg).
 -- Cada povoamento extra entra aqui, e o lote soma sozinho: quantidade_inicial e peso_inicial_kg

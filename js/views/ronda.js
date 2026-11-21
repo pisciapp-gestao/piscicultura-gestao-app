@@ -23,6 +23,7 @@ export function acoesDoTanque(ctx, D, t, F, volta) {
     { tipo: 'biometria', ic: 'peso', rot: 'Pesagem', sub: ult ? `última ${fmtD(ult)}` : 'nunca pesado', alerta: sit.pesar },
     { tipo: 'manejo', ic: 'probi', rot: 'Probiótico', sub: 'na ração ou na água' },
     ctx.podeGerir() && { tipo: 'despesca', ic: 'despesca', rot: 'Despesca', sub: 'tirar peixes' },
+    ctx.podeGerir() && { tipo: 'transferencia', ic: 'transferir', rot: 'Transferência', sub: 'passar peixes para outro tanque' },
   ].filter(Boolean).map((a) => ({ ...a, href: href(a.tipo) }));
 }
 

@@ -63,6 +63,14 @@ export function renderMais(ctx, el) {
       <button class="btn primario" type="submit">Salvar</button></form></div></details>` : ''}
 
     ${p.papel === 'dono' ? `<details class="card form-dobra">
+      <summary><span><b>Peso de venda</b><small>${state.ref.pesoVenda ? `${fmtNum(state.ref.pesoVenda, state.ref.pesoVenda % 1 ? 1 : 0)} kg por peixe` : 'não informado'}</small></span></summary>
+      <div class="form">
+      <small style="display:block">Com que peso vocês vendem o peixe. O app usa para dizer quanto falta de ração até vender, pela tabela de alimentação. Cada tanque pode ter o seu próprio (na tela do tanque, em "Peso de venda").</small>
+      <form id="f-venda" class="saco-linha"><label class="saco-campo"><span>Peso de cada peixe</span>
+        <span class="com-sufixo"><input id="pesovenda" type="text" inputmode="decimal" maxlength="6" placeholder="Ex.: 3,5" value="${state.ref.pesoVenda ? String(state.ref.pesoVenda).replace('.', ',') : ''}" required><em>kg</em></span></label>
+      <button class="btn primario" type="submit">Salvar</button></form></div></details>` : ''}
+
+    ${p.papel === 'dono' ? `<details class="card form-dobra">
       <summary><span><b>Preço do peixe</b><small>${state.ref.precoKg ? `R$ ${fmtNum(state.ref.precoKg, 2)} por kg` : 'não informado'}</small></span></summary>
       <div class="form">
       <small style="display:block">Usado só para estimar, na tela Início, quanto vale o peixe que está na água.</small>
@@ -134,6 +142,19 @@ export function renderMais(ctx, el) {
       await ctx.atualizarRef(true);
       ctx.toast(`Saco = ${fmtNum(kg, 0)} kg`, 'ok');
     } catch (e) { ctx.toast('Não salvou: ' + e.message, 'erro'); }
+  });
+  const fv = el.querySelector('#f-venda');
+  if (fv) fv.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const kg = num(fv.querySelector('#pesovenda').value);
+    if (!(kg > 0 && kg <= 20)) return ctx.toast('Informe o peso de venda em kg por peixe (ex.: 3,5).', 'erro');
+    if (!navigator.onLine) return ctx.toast('Sem internet', 'erro');
+    try {
+      await ctx.api.salvarPesoVenda(state.perfil.fazenda_id, kg);
+      await ctx.atualizarRef(true);
+      ctx.toast(`Peso de venda: ${fmtNum(kg, kg % 1 ? 1 : 0)} kg por peixe`, 'ok');
+      renderMais(ctx, el);
+    } catch (e) { ctx.toast(/peso_venda_kg/.test(e.message || '') ? 'Falta rodar o sql/38 no Supabase.' : 'Não salvou: ' + e.message, 'erro'); }
   });
   const fp = el.querySelector('#f-preco');
   if (fp) fp.addEventListener('submit', async (ev) => {

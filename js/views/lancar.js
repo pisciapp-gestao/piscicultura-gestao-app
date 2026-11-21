@@ -8,6 +8,7 @@ import { confirmar } from '../dialogo.js';
 import { ligarTeclado } from '../teclado.js';
 import { desfazerLancamento, minutosParaDesfazer } from '../desfazer.js';
 import { ordemNatural } from './home.js';
+import { renderTransferir } from './transferir.js';
 import { AGUA_LIMITES, PESO_SACO_PADRAO_KG, CAUSAS_MORTE, TAXA_RACAO } from '../config.js';
 import { sugestaoRacao, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui, tipoRacaoDoLote, faltaNoEstoque } from '../calc.js';
 
@@ -16,6 +17,7 @@ const TIPOS = {
   biometria: { rotulo: 'Biometria', tabela: 'biometrias' },
   mortalidade: { rotulo: 'Mortalidade', tabela: 'mortalidade' },
   despesca: { rotulo: 'Despesca', tabela: 'despescas', gerir: true }, // peso total da fazenda: só dono e gerente
+  transferencia: { rotulo: 'Transferência', tabela: 'transferencias', gerir: true }, // peixes de um tanque para outro (sql/37): tela própria
   manejo: { rotulo: 'Manejo', tabela: 'manejos' },
   agua: { rotulo: 'Água', tabela: 'qualidade_agua' },
 };
@@ -103,14 +105,15 @@ function camposDoTipo(tipo, kgSaco, verDinheiro = false) {
         <input id="desp-qtd" class="grande" type="text" inputmode="numeric" autocomplete="off" placeholder="0" required></label>
       <label>Peso total bruto (kg)
         <input id="desp-bruto" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex.: 9547" required></label>
-      <label>Peso total líquido (kg) <small class="mudo">(opcional)</small>
+      <label class="desp-desc"><span class="rot">Desconto do peso bruto <small class="opc">opcional</small></span>
+        <span class="com-sufixo"><input id="desp-desc" type="text" inputmode="decimal" autocomplete="off" maxlength="5" placeholder="Ex.: 2"><em>%</em></span>
+        <small class="mudo" id="desp-desc-ajuda">O peso líquido é preenchido sozinho.</small></label>
+      <label><span class="rot">Peso total líquido (kg) <small class="opc">opcional</small></span>
         <input id="desp-liquido" type="text" inputmode="decimal" autocomplete="off" placeholder="Ex.: 9356"></label>
-      ${verDinheiro ? `<div class="man-dose desp-venda">
-        <label>Preço de venda por kg <small class="mudo">(opcional)</small>
-          <span class="com-prefixo"><em>R$</em><input id="desp-preco" type="text" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="0,00"></span></label>
-        <label>Comprador <small class="mudo">(opcional)</small>
-          <input id="desp-comprador" type="text" maxlength="80" autocomplete="off"></label>
-      </div>` : ''}
+      ${verDinheiro ? `<label><span class="rot">Preço de venda por kg <small class="opc">opcional</small></span>
+        <span class="com-prefixo"><em>R$</em><input id="desp-preco" type="text" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="0,00"></span></label>
+      <label><span class="rot">Comprador <small class="opc">opcional</small></span>
+        <input id="desp-comprador" type="text" maxlength="80" autocomplete="off"></label>` : ''}
       <div class="calc resultado" id="desp-calc" hidden></div>`;
   }
   return `<label>Quantos peixes morreram?
@@ -122,10 +125,23 @@ function camposDoTipo(tipo, kgSaco, verDinheiro = false) {
     </ol></details>`;
 }
 
+// a aba escolhida fica à vista no celular estreito. Na troca de aba, a faixa parte de onde estava e desliza até ela.
+function centrarAba(sg, on, antes) {
+  const alvo = Math.max(0, on.offsetLeft - (sg.clientWidth - on.offsetWidth) / 2);
+  if (antes == null) { sg.scrollLeft = alvo; return; }
+  sg.scrollLeft = antes;
+  const suave = !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  requestAnimationFrame(() => sg.scrollTo({ left: alvo, behavior: suave ? 'smooth' : 'auto' }));
+}
+
 export async function renderLancar(ctx, el, params = {}) {
   const { state } = ctx;
   const tiposVisiveis = Object.entries(TIPOS).filter(([, v]) => !v.gerir || ctx.podeGerir());
   const tipo = tiposVisiveis.some(([k]) => k === params.tipo) ? params.tipo : 'racao';
+  // trocou de aba (Ração → Biometria...): o formulário novo entra em cascata, como uma tela nova
+  // trocou de aba (Ração → Biometria...): o título e as abas ficam parados (só o risquinho desliza);
+  // os balões do formulário entram em cascata (css: .troca-aba)
+  if (params.de !== undefined && el.classList) { el.classList.add('cascata', 'troca-aba'); setTimeout(() => el.classList.remove('cascata', 'troca-aba'), 600); }
   // de onde veio (ronda ou tela do tanque): depois de salvar, o "voltar" leva para lá
   const volta = params.volta === 'ronda' || params.volta === 't' ? params.volta : '';
   const { tanques, lotes } = state.ref;
@@ -136,6 +152,20 @@ export async function renderLancar(ctx, el, params = {}) {
     return;
   }
 
+  if (tipo === 'transferencia') {
+    const segHtml = `<div class="seg" style="--n:${tiposVisiveis.length}" role="tablist">${tiposVisiveis.map(([k, v]) => `<button type="button" data-tipo="${k}" class="${k === tipo ? 'on' : ''}">${v.rotulo}</button>`).join('')}</div>`;
+    let primeira = true; // a tela da transferência se redesenha ao escolher tanques: o deslize das abas só na chegada
+    const ligarSeg = () => {
+      const sg = el.querySelector('.seg'), on = sg && sg.querySelector('button.on');
+      if (on && sg.scrollWidth > sg.clientWidth) centrarAba(sg, on, primeira ? params.rolagem : null);
+      if (primeira && params.de !== undefined && sg) sg.dataset.de = params.de;
+      primeira = false;
+      el.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => {
+        if (b.dataset.tipo !== tipo) renderLancar(ctx, el, { tipo: b.dataset.tipo, tanque: params.tanque, de: tiposVisiveis.findIndex(([k]) => k === tipo), volta, rolagem: el.querySelector('.seg').scrollLeft });
+      }));
+    };
+    return renderTransferir(ctx, el, { tanque: params.tanque, segHtml, ligarSeg });
+  }
   const ultimo = (await db.kvGet('ultimoTanque')) || '';
   const tanqueInicial = tanques.some((t) => t.id === params.tanque) ? params.tanque : (tanques.some((t) => t.id === ultimo) ? ultimo : tanques[0].id);
   const hoje = hojeISO();
@@ -183,10 +213,10 @@ export async function renderLancar(ctx, el, params = {}) {
     <aside class="lc-painel" id="painel-tq" aria-label="Resumo do tanque escolhido"></aside></div>`;
 
   // com 5 abas no celular estreito, a aba escolhida fica à vista
-  { const sg = el.querySelector('.seg'), on = sg && sg.querySelector('button.on'); if (on && sg.scrollWidth > sg.clientWidth) sg.scrollLeft = on.offsetLeft - (sg.clientWidth - on.offsetWidth) / 2; }
+  { const sg = el.querySelector('.seg'), on = sg && sg.querySelector('button.on'); if (on && sg.scrollWidth > sg.clientWidth) centrarAba(sg, on, params.rolagem); }
   if (params.de !== undefined) { const sg = el.querySelector('.seg'); if (sg) sg.dataset.de = params.de; }
   el.querySelectorAll('.seg button').forEach((b) =>
-    b.addEventListener('click', () => renderLancar(ctx, el, { tipo: b.dataset.tipo, tanque: el.querySelector('#tanque').value, de: tiposVisiveis.findIndex(([k]) => k === tipo), volta })));
+    b.addEventListener('click', () => renderLancar(ctx, el, { tipo: b.dataset.tipo, tanque: el.querySelector('#tanque').value, de: tiposVisiveis.findIndex(([k]) => k === tipo), volta, rolagem: el.querySelector('.seg').scrollLeft })));
 
   const f = el.querySelector('#f');
   let rascunhoSalvo = false, timerRascunho = null;
@@ -387,7 +417,7 @@ export async function renderLancar(ctx, el, params = {}) {
     selLote.addEventListener('change', atualizaPm);
     selTanque.addEventListener('change', atualizaPm);
     if (navigator.onLine) {
-      ctx.api.resumoLotes().then((r) => { mortos = Object.fromEntries(r.map((x) => [x.lote_id, Number(x.mortos) + Number(x.despescados || 0)])); atualizaPm(); }).catch(() => {});
+      ctx.api.resumoLotes().then((r) => { mortos = Object.fromEntries(r.map((x) => [x.lote_id, Number(x.mortos) + Number(x.despescados || 0) + Number(x.transferidos || 0)])); atualizaPm(); }).catch(() => {});
     }
   }
 
@@ -439,7 +469,7 @@ export async function renderLancar(ctx, el, params = {}) {
       if (i.medioLiquidoKg != null) L.push(`Peso médio líquido: ${pesoMedioTxt(i.medioLiquidoKg)} por peixe`, `Diferença: ${fmtNum(i.difKg, 0)} kg (${fmtNum(i.difPct, 1)}% do bruto)`);
       if (i.peixesHa != null) L.push(`${fmtInt(i.peixesHa)} peixes por hectare`);
       const prTxt = (f.querySelector('#desp-preco') || { value: '' }).value.trim(), pr = prTxt ? numMoeda(prTxt) : null;
-      if (pr > 0) L.push(`Receita: ${fmtBRL(b * pr)} (sobre o peso bruto)`);
+      if (pr > 0) L.push(`Receita: ${fmtBRL(i.kgVendido * pr)} (${fmtNum(i.kgVendido, 0)} kg ${i.receitaSobre} × ${fmtBRL(pr)})`);
       box.textContent = L.join('\n'); box.hidden = false;
     };
     f.querySelectorAll('#desp-tipo .tile').forEach((b) => b.addEventListener('click', () => {
@@ -447,6 +477,20 @@ export async function renderLancar(ctx, el, params = {}) {
       f.querySelectorAll('#desp-tipo .tile').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(on)); });
       pintarDica();
     }));
+    // desconto em % (sugestão do cliente piloto, 15/11/2026): bruto − % = líquido, sem sair do app para a calculadora.
+    // O último % usado fica guardado no aparelho e já vem preenchido na próxima despesca.
+    const descEl = f.querySelector('#desp-desc'), liqEl = f.querySelector('#desp-liquido'), brutoEl = f.querySelector('#desp-bruto');
+    try { const g = localStorage.getItem('despesca_desconto'); if (g) descEl.value = g; } catch { /* sem armazenamento */ }
+    const aplicarDesconto = () => {
+      const d = numDecimal(descEl.value), b = numDecimal(brutoEl.value);
+      if (!String(descEl.value).trim() || !(d > 0 && d < 50) || !(b > 0) || (brutoEl.value.includes('.') && brutoEl.value.includes(','))) return;
+      const lq = Math.round(b * (1 - d / 100) * 10) / 10;
+      liqEl.value = String(lq).replace('.', ',');
+      const aj = f.querySelector('#desp-desc-ajuda'); if (aj) aj.textContent = `${fmtNum(b, b % 1 ? 1 : 0)} kg − ${String(d).replace('.', ',')}% = ${fmtNum(lq, lq % 1 ? 1 : 0)} kg de peso líquido.`;
+    };
+    descEl.addEventListener('input', () => { aplicarDesconto(); contas(); });
+    brutoEl.addEventListener('input', aplicarDesconto);
+    liqEl.addEventListener('input', () => { descEl.value = ''; const aj = f.querySelector('#desp-desc-ajuda'); if (aj) aj.textContent = 'O peso líquido é preenchido sozinho.'; }); // líquido digitado à mão: vale o que foi digitado
     ['#desp-qtd', '#desp-bruto', '#desp-liquido', '#desp-preco'].forEach((s) => { const c = f.querySelector(s); if (c) c.addEventListener('input', contas); });
     selTanque.addEventListener('change', contas);
     pintarDica();
@@ -635,6 +679,9 @@ export async function renderLancar(ctx, el, params = {}) {
       if (!(b > 0)) return mostrarErro('Informe o peso total bruto em kg.');
       if (lqTxt && !(lq > 0)) return mostrarErro('Confira o peso líquido em kg, ou deixe em branco.');
       if (lq != null && lq > b) return mostrarErro('O peso líquido não pode ser maior que o bruto.');
+      const descTxt = (f.querySelector('#desp-desc') || { value: '' }).value.trim(), desc = descTxt ? numDecimal(descTxt) : null;
+      if (descTxt && !(desc > 0 && desc < 50)) return mostrarErro('Confira o desconto: um número entre 0 e 50 (ex.: 2 para 2%), ou deixe em branco.');
+      try { if (desc > 0) localStorage.setItem('despesca_desconto', descTxt); } catch { /* sem armazenamento */ }
       const lote = lotes.find((l) => l.id === lote_id);
       if (lote && data < lote.data_entrada) return mostrarErro(`A data não pode ser antes da entrada do lote (${fmtData(lote.data_entrada)}).`);
       const [despescaLigada, dados] = await Promise.all([

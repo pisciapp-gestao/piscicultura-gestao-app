@@ -1,4 +1,4 @@
-// Testa o sql/39: povoamentos em outra data (o lote soma sozinho; só dono/gerente; corrigir e excluir). Postgres de verdade (PGlite).
+// Testa o sql/40: povoamentos em outra data (o lote soma sozinho; só dono/gerente; corrigir e excluir). Postgres de verdade (PGlite).
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +9,7 @@ await db.exec(`create role anon; create role authenticated; create schema auth; 
   create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('teste.uid', true), '')::uuid $$; grant usage on schema auth to anon, authenticated;`);
 await db.exec(`grant usage on schema public to anon, authenticated; alter default privileges in schema public grant select, insert, update, delete on tables to anon, authenticated;`);
 for (const f of readdirSync(DIR).filter((f) => /^\d\d_.*\.sql$/.test(f) && !f.startsWith('05_')).sort()) await db.exec(readFileSync(DIR + f, 'utf8'));
-await db.exec(readFileSync(DIR + '39_povoamentos.sql', 'utf8')); // de novo: pode repetir
+await db.exec(readFileSync(DIR + '40_povoamentos.sql', 'utf8')); // de novo: pode repetir
 await db.exec(`grant select, insert, update, delete on all tables in schema public to anon, authenticated;`);
 
 const D = '00000000-0000-4000-8000-0000000000a1', W = '00000000-0000-4000-8000-0000000000a3', G = '00000000-0000-4000-8000-0000000000a5', G2 = '00000000-0000-4000-8000-0000000000a6', D2 = '00000000-0000-4000-8000-0000000000a9';

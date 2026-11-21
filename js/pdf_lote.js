@@ -123,7 +123,7 @@ export function gerarPdfLote(jsPDF, d) {
     ['Sobrevivência', c.sobrevivencia != null ? fmtPct(c.sobrevivencia) : '-', '%', `${plural(c.mortos, 'morto', 'mortos')}`],
     encerrado && c.despescados ? ['Peso retirado', n(c.pesoDespescado, 0), 'kg', `na entrada: ${n(c.biomassaInicial, 0)} kg`] : ['Biomassa', c.biomassaAtual != null ? n(c.biomassaAtual, 0) : '-', c.biomassaAtual != null ? 'kg' : '', `na entrada: ${n(c.biomassaInicial, 0)} kg`],
     ['Ração fornecida', n(c.racaoTotal, 0), 'kg', `${n(c.racaoTotal / kgSaco, 1)} sacos de ${n(kgSaco, 0)} kg`],
-    ['Conversão alimentar', c.ca != null ? n(c.ca, 2) : '-', '', c.ca != null ? 'kg de ração por kg ganho' : c.caAguardaPesagem ? 'aparece após a próxima pesagem' : 'precisa de biometria'],
+    ['Conversão alimentar', c.ca != null ? n(c.ca, 2) : '-', '', c.ca != null ? 'kg de ração por kg ganho' : c.caAguardaPesagem ? 'após a próxima pesagem' : 'precisa de biometria'],
     ['Ganho diário', c.gpd != null ? n(c.gpd, 1) : '-', c.gpd != null ? 'g/dia' : '', 'por peixe desde a entrada'],
   ];
   if (dinheiro) {
@@ -157,6 +157,8 @@ export function gerarPdfLote(jsPDF, d) {
     ? `${plural(c.mortos, 'morte registrada', 'mortes registradas')}. Na despesca total saíram ${fmtInt(c.despescados)} de ${fmtInt(qi)} peixes (${fmtPct(c.sobrevivencia ?? 0)}% de sobrevivência).`
     : `${plural(c.mortos, 'morte', 'mortes')} em ${fmtInt(qi)} peixes (${fmtPct(qi > 0 ? (c.mortos / qi) * 100 : 0)}%). Restam cerca de ${fmtInt(c.vivos)}.`]);
   if (c.despescados) obs.push(['Despesca', `${plural(c.despescados, 'peixe retirado', 'peixes retirados')}, ${n(c.pesoDespescado, 0)} kg de peso bruto.`]);
+  if (c.transferidos) obs.push(['Transferência', `${plural(c.transferidos, 'peixe foi', 'peixes foram')} para outros tanques${c.tudoTransferido ? ' e o tanque foi esvaziado' : ''}. Não conta como venda: ${n(c.racaoRepassada / kgSaco, 0)} sacos de ração foram junto com eles como custo.`]);
+  if (c.racaoHerdada) obs.push(['Veio de outro tanque', `Parte dos peixes veio de outro tanque e trouxe ${n(c.racaoHerdada / kgSaco, 0)} sacos de ração como custo (o lucro já conta).`]);
   obs.push(['Ração', `${n(c.racaoTotal, 0)} kg fornecidos (${n(c.racaoTotal / kgSaco, 1)} sacos de ${n(kgSaco, 0)} kg)${c.racaoMediaDia != null ? `, média de ${n(c.racaoMediaDia, 1)} kg por dia` : ''}.`]);
   if (c.ca != null) obs.push(['Conversão', `${n(c.ca, 2)} kg de ração por kg de peixe ganho até a última biometria. Referência usual: 1,2 a 2,0, conforme espécie e fase.`]);
   if (dinheiro && c.custoRacao != null) obs.push(['Custo', `${fmtBRL(c.custoRacao)} em ração, calculado pelo preço médio das compras com valor informado.`]);

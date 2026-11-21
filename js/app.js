@@ -1,6 +1,7 @@
 // Ponto de entrada: sessão, perfil, roteamento, sincronização offline.
 import { SUPABASE_URL, SUPABASE_ANON_KEY, TIMEOUT_REDE_MS, TIMEOUT_LEITURA_MS, LIMITE_ABERTURA_MS, JANELA_SEM_REDE_MS, TERMOS_VERSAO } from './config.js';
 import { iniciarSeg } from './seg.js';
+import { iniciarSanfona } from './sanfona.js';
 import { DEV_LOGIN, loginAutomaticoAtivo } from './dev-login.js';
 import { esc, parseHash, ROTULO_PAPEL, traduzErro, ehErroDeRede, plural, ligarMascaraMoeda } from './util.js';
 import { criarApi } from './api.js';
@@ -91,8 +92,8 @@ async function carregarRefLocal() {
 async function atualizarRef() {
   if (!navigator.onLine || !state.user || !api) return false;
   try {
-    const [tanques, lotes, kgSaco, logo, precoKg] = await Promise.all([api.tanques(), api.lotes({ apenasAtivos: true }), api.kgSaco().catch(() => null), api.logo().catch(() => undefined), api.precoKg().catch(() => null)]);
-    state.ref = { tanques, lotes, kgSaco: kgSaco || (state.ref && state.ref.kgSaco) || null, logo: logo === undefined ? (state.ref && state.ref.logo) || null : logo, precoKg, userId: state.perfil.id, fazendaId: state.perfil.fazenda_id, atualizado_em: new Date().toISOString() };
+    const [tanques, lotes, kgSaco, logo, precoKg, pesoVenda] = await Promise.all([api.tanques(), api.lotes({ apenasAtivos: true }), api.kgSaco().catch(() => null), api.logo().catch(() => undefined), api.precoKg().catch(() => null), api.pesoVenda().catch(() => null)]);
+    state.ref = { tanques, lotes, kgSaco: kgSaco || (state.ref && state.ref.kgSaco) || null, logo: logo === undefined ? (state.ref && state.ref.logo) || null : logo, precoKg, pesoVenda, userId: state.perfil.id, fazendaId: state.perfil.fazenda_id, atualizado_em: new Date().toISOString() };
     await db.kvSet('ref', state.ref);
     atualizarMarca();
     state.semRede = false;
@@ -310,11 +311,14 @@ async function abrirApp(user) {
   // Sem isso, quem perdeu o acesso ainda via os dados guardados ao abrir o app sem internet.
   const apagarCopias = async () => { for (const k of ['perfil', 'ref', 'resumo', 'racao14', 'agua14', 'admin']) await db.kvDel(k); };
   if (!perfil) { if (daRede && guardado) await apagarCopias(); if (state.convite) renderAceitarConvite(ctx, root, user, state.convite); else renderCriarFazenda(ctx, root, user); return; }
-  if (state.convite) { // conta já está numa fazenda: o convite não serve para ela
+  // desativado na fazenda antiga e com convite de outra: pode aceitar e mudar de fazenda (sql/36)
+  if (perfil.ativo === false && state.convite && perfil.papel !== 'dono') { if (daRede) await apagarCopias(); renderAceitarConvite(ctx, root, user, state.convite); return; }
+  if (state.convite) { // conta ainda ATIVA numa fazenda: o convite não serve para ela
     descartarConvite();
-    setTimeout(() => toast('Convite não usado: esta conta já faz parte de uma fazenda.', 'erro'), 600);
+    const de = perfil.fazendas && perfil.fazendas.nome ? ` (${perfil.fazendas.nome})` : '';
+    setTimeout(() => toast(`Convite não usado: esta conta ainda está ativa em outra fazenda${de}. Peça ao dono dela para desativar o seu acesso em Fazenda > Equipe e abra o convite de novo.`, 'erro'), 600);
   }
-  if (perfil.ativo === false) { if (daRede) await apagarCopias(); mostrarMensagem('Acesso desativado', 'Seu acesso a esta fazenda foi desativado. Fale com o dono.'); return; }
+  if (perfil.ativo === false) { if (daRede) await apagarCopias(); mostrarMensagem('Acesso desativado', 'Seu acesso a esta fazenda foi desativado. Fale com o dono. Se for trabalhar em outra fazenda que usa o PisciApp, abra o convite que o novo dono mandar.'); return; }
   // suporte do administrador (sql/34): em suporte o banco mostra a fazenda do cliente, e a própria some (fica parecendo
   // "bloqueada"). Antes dessa conferência, pergunta se há suporte aberto e abre a fazenda do cliente como dono.
   if (daRede && perfil.fazenda_id && !perfil.fazendas) {
@@ -477,6 +481,7 @@ function montarShell() {
     </aside>
     <main id="view" class="view"></main>
     <nav class="abas" aria-label="Navegação">
+      <i class="abas-ind" aria-hidden="true"></i>
       ${links.map(([aba, href, ic, txt]) => `<a data-aba="${aba}" href="${href}"><span>${icone(ic)}</span>${txt}</a>`).join('')}
     </nav>
   </div>`;
@@ -495,6 +500,16 @@ function renderErro(el, e) {
   el.querySelector('#b-retry').addEventListener('click', async () => { if (Date.now() < redeMortaAte) await testarRede(); rotear(); });
 }
 
+// marcador da aba de baixo: desliza até a aba acesa (css: .abas-ind). Na primeira vez só aparece no lugar.
+function moverIndicador() {
+  const nav = document.querySelector('.abas');
+  if (!nav) return;
+  const i = [...nav.querySelectorAll('a')].findIndex((a) => a.classList.contains('on'));
+  nav.style.setProperty('--i', Math.max(i, 0));
+  nav.classList.toggle('tem-ind', i >= 0);
+  if (!nav.classList.contains('pronta')) requestAnimationFrame(() => requestAnimationFrame(() => nav.classList.add('pronta')));
+}
+
 async function rotear() {
   const view = document.getElementById('view');
   if (!view || !state.perfil) return;
@@ -509,10 +524,14 @@ async function rotear() {
     a.classList.toggle('on', on);
     if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
+  moverIndicador();
 
   marcarAtalho(rota === 'relatorio' && partes[0] === 'racao' ? 'relatorio-racao' : rota);
   registrarRota(location.hash, rota, partes);
   const el = document.createElement('div'); // contêiner novo por rota: renderizações atrasadas não sujam a tela atual
+  // ao abrir qualquer tela, os blocos entram em cascata, um logo depois do outro (css: .cascata).
+  // Só na abertura: depois a classe sai, e redesenhos dentro da tela (digitar, escolher) não repetem o efeito.
+  el.className = 'cascata';
   view.replaceChildren(...(ehAbaPrincipal(rota, partes) ? [] : [linhaVoltar(rota)]), el);
   const meu = ++tokenRota;
   window.scrollTo(0, 0);
@@ -540,6 +559,7 @@ async function rotear() {
   } catch (e) {
     if (meu === tokenRota) renderErro(el, e);
   }
+  setTimeout(() => el.classList.remove('cascata'), 600); // a cascata mais longa termina em ~490 ms
   atualizarLateral(ctx).catch(() => {}); // resumo do dia na lateral (computador)
 }
 
@@ -584,6 +604,7 @@ function criarCliente() {
 
 async function iniciar() {
   iniciarSeg();
+  iniciarSanfona(); // balões que abrem e fecham deslizam
   if (SUPABASE_ANON_KEY.startsWith('COLE_') || !window.supabase) {
     mostrarMensagem('Configuração pendente', 'A chave do Supabase ainda não foi configurada neste app (js/config.js).', false);
     return;

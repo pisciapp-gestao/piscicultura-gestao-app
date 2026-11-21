@@ -375,7 +375,7 @@ export async function renderTanque(ctx, el, id, params = {}) {
       } catch (e) { ctx.toast(e.message, 'erro'); }
     }));
 
-  // ---- povoamento em outra data (sql/36): soma peixes no mesmo lote ----
+  // ---- povoamento em outra data (sql/40): soma peixes no mesmo lote ----
   const formPov = async (l, p) => {
     const pmIni = p ? Number(p.peso_total_kg) / Math.max(1, Number(p.quantidade)) : null;
     const g = p ? pmIni < 1 : ['alevinagem', 'bercario'].includes(l.tipo);

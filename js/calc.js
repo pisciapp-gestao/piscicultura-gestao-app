@@ -1,11 +1,11 @@
 // Cálculos do relatório de um lote (puros, testáveis em Node)
 import { diasEntre, fmtInt, fmtNum, pesoMedioTxt } from './util.js';
-import { AGUA_TAMBAQUI as AG } from './config.js';
+import { AGUA_TAMBAQUI as AG, TABELA_ALIMENTAR, TABELA_PEIXES } from './config.js';
 
 const soma = (arr, k) => arr.reduce((s, x) => s + Number(x[k] || 0), 0);
 
-// Peixes que continuam no tanque: entrada − mortos − retirados nas despescas (linha do resumo_lotes)
-export const vivosDoLote = (l, r) => Math.max(0, (Number(l.quantidade_inicial) || 0) - Number((r && r.mortos) || 0) - Number((r && r.despescados) || 0));
+// Peixes que continuam no tanque: entrada − mortos − retirados nas despescas − transferidos para outros tanques (linha do resumo_lotes)
+export const vivosDoLote = (l, r) => Math.max(0, (Number(l.quantidade_inicial) || 0) - Number((r && r.mortos) || 0) - Number((r && r.despescados) || 0) - Number((r && r.transferidos) || 0));
 
 // Números de uma despesca. Sem peso líquido, os campos dele ficam null.
 export function indicadoresDespesca(d, areaHa) {
@@ -16,7 +16,10 @@ export function indicadoresDespesca(d, areaHa) {
     difKg: l != null ? b - l : null,
     difPct: l != null && b > 0 ? ((b - l) / b) * 100 : null,
     peixesHa: Number(areaHa) > 0 && q > 0 ? q / Number(areaHa) : null,
-    receita: Number(d.preco_kg) > 0 && b > 0 ? b * Number(d.preco_kg) : null, // sobre o peso bruto
+    // receita sobre o peso VENDIDO: o líquido quando informado (o bruto menos a quebra), senão o bruto
+    kgVendido: l != null && l > 0 ? l : b,
+    receitaSobre: l != null && l > 0 ? 'líquido' : 'bruto',
+    receita: Number(d.preco_kg) > 0 && b > 0 ? (l != null && l > 0 ? l : b) * Number(d.preco_kg) : null,
   };
 }
 
@@ -56,15 +59,29 @@ export function pesoMedioKg(b) {
  *  - peixe despescado sai dos vivos, mas o peso bruto dele conta como ganho
  *  - lote encerrado por despesca total: números reais (peso retirado e toda a ração), sem estimativa
  */
-export function calcularLote(lote, bios, mort, rac, hoje, precoKg = null, desp = []) {
+export function calcularLote(lote, bios, mort, rac, hoje, precoKg = null, desp = [], transf = []) {
+  // transferências (sql/37): saídas = peixes que foram para outros tanques (não é venda); entradas = vieram de outro tanque.
+  // Quem chegou já está somado na entrada do lote (quantidade e peso iniciais); a ração da origem vem junto como custo.
+  const saidas = (transf || []).filter((t) => t.lote_origem === lote.id);
+  const entradas = (transf || []).filter((t) => t.lote_destino === lote.id);
+  const transferidos = soma(saidas, 'quantidade');
+  const pesoTransferido = saidas.reduce((s, t) => s + Number(t.quantidade) * Number(t.peso_medio_kg), 0);
+  const racaoHerdada = soma(entradas, 'racao_kg');
+  const racaoRepassada = soma(saidas, 'racao_kg');
   const qtdInicial = Number(lote.quantidade_inicial);
   const mortos = soma(mort, 'quantidade');
   const despescados = soma(desp, 'quantidade');
   const pesoDespescado = soma(desp, 'peso_bruto_kg');
   const comPreco = desp.filter((d) => Number(d.preco_kg) > 0);
-  const receita = comPreco.length ? comPreco.reduce((s, d) => s + Number(d.peso_bruto_kg) * Number(d.preco_kg), 0) : null;
-  const fechado = !lote.ativo && desp.some((d) => d.tipo === 'total'); // a despesca total contou os peixes de verdade
-  const vivos = fechado ? 0 : Math.max(0, qtdInicial - mortos - despescados);
+  // kg vendido de cada despesca: o peso líquido quando informado, senão o bruto (pedido do cliente piloto, 15/11/2026)
+  const vendido = (d) => (d.peso_liquido_kg != null && Number(d.peso_liquido_kg) > 0 ? Number(d.peso_liquido_kg) : Number(d.peso_bruto_kg) || 0);
+  const pesoVendido = desp.reduce((s, d) => s + vendido(d), 0);
+  const receita = comPreco.length ? comPreco.reduce((s, d) => s + vendido(d) * Number(d.preco_kg), 0) : null;
+  const receitaSobreBruto = comPreco.filter((d) => !(d.peso_liquido_kg != null && Number(d.peso_liquido_kg) > 0)).length;
+  const despTotal = desp.some((d) => d.tipo === 'total');
+  const tudoTransferido = !lote.ativo && !despTotal && saidas.some((t) => t.encerrou_origem); // esvaziou numa transferência
+  const fechado = !lote.ativo && (despTotal || tudoTransferido); // a despesca total (ou a transferência final) contou os peixes de verdade
+  const vivos = fechado ? 0 : Math.max(0, qtdInicial - mortos - despescados - transferidos);
   const racaoTotal = soma(rac, 'quantidade_kg');
   const biomassaInicial = Number(lote.peso_inicial_kg);
   const pmInicial = qtdInicial > 0 ? biomassaInicial / qtdInicial : null; // kg
@@ -72,7 +89,7 @@ export function calcularLote(lote, bios, mort, rac, hoje, precoKg = null, desp =
   const ultima = bios.length ? bios[bios.length - 1] : null;
   const pmAtual = ultima ? pesoMedioKg(ultima) : null; // kg
   const biomassaAtual = fechado ? 0 : pmAtual != null ? vivos * pmAtual : null;
-  const ganhoBiomassa = biomassaAtual != null ? biomassaAtual + pesoDespescado - biomassaInicial : null;
+  const ganhoBiomassa = biomassaAtual != null ? biomassaAtual + pesoDespescado + pesoTransferido - biomassaInicial : null;
 
   const racaoAteBio = fechado ? racaoTotal : ultima ? soma(rac.filter((r) => r.data <= ultima.data), 'quantidade_kg') : null;
 
@@ -87,8 +104,9 @@ export function calcularLote(lote, bios, mort, rac, hoje, precoKg = null, desp =
   if (andamento) {
     if (base && ultima && ultima.data > base.data && pmAtual != null) {
       const antes = (lista, campo) => soma(lista.filter((x) => x.data <= base.data), campo);
-      const vivosBase = Math.max(0, qtdInicial - antes(mort, 'quantidade') - antes(desp, 'quantidade'));
-      const despDepois = soma(desp.filter((d) => d.data > base.data), 'peso_bruto_kg');
+      const vivosBase = Math.max(0, qtdInicial - antes(mort, 'quantidade') - antes(desp, 'quantidade') - antes(saidas, 'quantidade'));
+      const despDepois = soma(desp.filter((d) => d.data > base.data), 'peso_bruto_kg')
+        + saidas.filter((t) => t.data > base.data).reduce((s, t) => s + Number(t.quantidade) * Number(t.peso_medio_kg), 0);
       ganhoCA = vivos * pmAtual + despDepois - vivosBase * pesoMedioKg(base);
       racaoCA = soma(rac.filter((r) => r.data >= base.data && r.data <= ultima.data), 'quantidade_kg');
     } else { ganhoCA = null; racaoCA = null; } // falta uma pesagem depois do início no app
@@ -105,10 +123,17 @@ export function calcularLote(lote, bios, mort, rac, hoje, precoKg = null, desp =
     vivos,
     despescados,
     pesoDespescado,
+    pesoVendido,
     receita,
+    receitaSobreBruto, // despescas com preço mas sem peso líquido: a receita delas usa o bruto
     despescasSemPreco: desp.length - comPreco.length,
     // retirado também sobreviveu; na despesca total vale a contagem real (no máximo 100%)
-    sobrevivencia: qtdInicial > 0 ? Math.min(100, ((fechado ? despescados : Math.max(0, qtdInicial - mortos)) / qtdInicial) * 100) : null,
+    sobrevivencia: qtdInicial > 0 ? Math.min(100, ((fechado ? despescados + transferidos : Math.max(0, qtdInicial - mortos)) / qtdInicial) * 100) : null,
+    transferidos,
+    pesoTransferido,
+    racaoHerdada,
+    racaoRepassada,
+    tudoTransferido,
     racaoTotal,
     racaoMediaDia: diasCultivo > 0 ? racaoTotal / diasCultivo : null,
     diasCultivo,
@@ -120,7 +145,8 @@ export function calcularLote(lote, bios, mort, rac, hoje, precoKg = null, desp =
     ganhoBiomassa,
     ca,
     gpd,
-    custoRacao: precoKg != null ? racaoTotal * precoKg : null,
+    // ração que ficou com este lote: a dada aqui + a que veio junto com os peixes − a que foi junto para outros tanques
+    custoRacao: precoKg != null ? Math.max(0, racaoTotal + racaoHerdada - racaoRepassada) * precoKg : null,
     // custo da ração por kg de peixe produzido (ração até a última biometria ÷ ganho de biomassa)
     custoKgProduzido: precoKg != null && ganhoCA > 0 && racaoCA > 0 ? (racaoCA * precoKg) / ganhoCA : null,
     // lote em andamento sem pesagem depois do início no app: a conversão aparece depois da próxima pesagem
@@ -290,7 +316,7 @@ export function fecharCiclo({ c, custoAlevino = null, despesas = 0, fechado = fa
     receita: c.receita, custoRacao: c.custoRacao, custoAlevino, despesas, custoTotal, lucro, faltando,
     completo: fechado && !faltando.length,
     margem: lucro != null && c.receita > 0 ? lucro / c.receita : null,
-    custoKg: c.pesoDespescado > 0 ? custoTotal / c.pesoDespescado : null,
+    custoKg: (c.pesoVendido ?? c.pesoDespescado) > 0 ? custoTotal / (c.pesoVendido ?? c.pesoDespescado) : null, // por kg vendido (líquido)
   };
 }
 
@@ -368,20 +394,22 @@ export function alertasManejo({ lotes, resumo, racaoHoje, mediaSemana, mortes, h
 }
 
 // Data de fim de um lote encerrado: a despesca total ou, sem ela, o último registro
-export function fimDoLote(lote, bios, mort, rac, hoje, desp = []) {
+export function fimDoLote(lote, bios, mort, rac, hoje, desp = [], transf = []) {
   if (lote.ativo) return hoje;
   const totais = desp.filter((d) => d.tipo === 'total').map((d) => d.data).sort();
   if (totais.length) return totais[totais.length - 1]; // a despesca total é o fim de verdade
+  const final = (transf || []).filter((t) => t.lote_origem === lote.id && t.encerrou_origem).map((t) => t.data).sort();
+  if (final.length) return final[final.length - 1]; // esvaziou numa transferência
   const ds = [...bios, ...mort, ...rac, ...desp].map((x) => x.data).sort();
   return ds.length ? ds[ds.length - 1] : lote.data_entrada;
 }
 
 // O mesmo cálculo do lote, mas só com o que aconteceu até "dias" depois da entrada (comparar ciclos na mesma idade)
-export function calcularNaIdade(lote, bios, mort, rac, dias, precoKg = null, desp = []) {
+export function calcularNaIdade(lote, bios, mort, rac, dias, precoKg = null, desp = [], transf = []) {
   const corte = somarDias(lote.data_entrada, dias);
   if (!corte) return null; // sem data de entrada válida não dá para recortar na mesma idade
   const ate = (x) => x.data <= corte;
-  return calcularLote(lote, bios.filter(ate), mort.filter(ate), rac.filter(ate), corte, precoKg, desp.filter(ate));
+  return calcularLote(lote, bios.filter(ate), mort.filter(ate), rac.filter(ate), corte, precoKg, desp.filter(ate), (transf || []).filter(ate));
 }
 
 // média de um campo numérico, ignorando vazios
@@ -423,4 +451,84 @@ export function faltaNoEstoque(saldoKg, pendentesKg, lancarKg) {
   if (saldoKg == null || saldoKg === '' || !Number.isFinite(Number(saldoKg))) return null;
   const resta = Number(saldoKg) - (Number(pendentesKg) || 0) - (Number(lancarKg) || 0);
   return resta < 0 ? Math.round(-resta * 100) / 100 : 0;
+}
+
+// Custo do alevino com as transferências (sql/37): o custo vai junto com os peixes, por peixe.
+// Ex.: o Samaúma pagou R$ 23.080 por 115.400 alevinos (R$ 0,20 cada) e mandou 5.500 para o Peixinho:
+// o Peixinho herda R$ 1.100 e o Samaúma fica com R$ 21.980. Encadeia (berçário → recria → engorda).
+// lotes: [{id, quantidade_inicial}] (a entrada já inclui quem chegou); custoDe: {lote_id: R$} do que foi lançado;
+// transfs: todas as transferências. Retorna {lote_id: R$ ou null (falta o custo de alguém na cadeia)}.
+export function custoAlevinoComTransf(lotes, custoDe, transfs) {
+  const porId = new Map(lotes.map((l) => [l.id, l]));
+  const ts = transfs || [];
+  const bruto = new Map(); // custo antes de mandar peixes adiante: o lançado + o herdado
+  const visitando = new Set();
+  const custoBruto = (id) => {
+    if (bruto.has(id)) return bruto.get(id);
+    if (visitando.has(id)) return null; // ciclo (não deveria existir): sem custo
+    visitando.add(id);
+    const entradas = ts.filter((t) => t.lote_destino === id);
+    let herdado = 0, falta = false;
+    for (const t of entradas) { const pp = porPeixe(t.lote_origem); if (pp == null) falta = true; else herdado += pp * Number(t.quantidade); }
+    const proprio = id in custoDe ? Number(custoDe[id]) : null;
+    const v = falta ? null : proprio == null && !entradas.length ? null : (proprio || 0) + herdado;
+    visitando.delete(id); bruto.set(id, v);
+    return v;
+  };
+  const porPeixe = (id) => { const l = porId.get(id); const b = custoBruto(id); const q = l ? Number(l.quantidade_inicial) : 0; return b == null || !(q > 0) ? null : b / q; };
+  const out = {};
+  for (const l of lotes) {
+    const b = custoBruto(l.id);
+    if (b == null) { out[l.id] = null; continue; }
+    const pp = porPeixe(l.id) || 0;
+    const saiu = ts.filter((t) => t.lote_origem === l.id).reduce((s, t) => s + pp * Number(t.quantidade), 0);
+    out[l.id] = Math.max(0, b - saiu);
+  }
+  return out;
+}
+
+// ----- ração pela tabela de alimentação (pedido do cliente piloto, 16/11/2026) -----
+// Ração que UM peixe come pela tabela para ir de pmIni a pmFim (kg). Em cada semana da tabela, a ração por grama
+// ganho é a da semana (kg na semana ÷ 40.000 peixes ÷ gramas ganhos). Acima de 3,6 kg segue o ritmo da última semana.
+export function racaoTabelaPorPeixe(pmIniKg, pmFimKg, tabela = TABELA_ALIMENTAR) {
+  const a = Number(pmIniKg) * 1000, b = Number(pmFimKg) * 1000;
+  if (!(a >= 0) || !(b > a)) return 0;
+  let kg = 0;
+  for (const [, pi, pf, , , , semanaKg] of tabela) {
+    const lo = Math.max(a, pi), hi = Math.min(b, pf);
+    if (hi > lo) kg += (semanaKg / TABELA_PEIXES) * ((hi - lo) / (pf - pi));
+  }
+  const ult = tabela[tabela.length - 1];
+  if (b > ult[2]) kg += (ult[6] / TABELA_PEIXES / (ult[2] - ult[1])) * (b - Math.max(a, ult[2]));
+  return kg;
+}
+
+// Linha da tabela para o peso médio atual: qual ração dar e quantas vezes por dia
+export function racaoCertaAgora(pmKg, tabela = TABELA_ALIMENTAR) {
+  if (!(pmKg > 0)) return null;
+  const g = pmKg * 1000;
+  const l = tabela.find(([, , pf]) => g <= pf) || tabela[tabela.length - 1];
+  return { racao: l[4], tratos: l[5], pct: l[3], semana: l[0] };
+}
+
+// Quanto falta de ração até o peso de venda (ou de passar de fase).
+// Pela tabela, para os peixes vivos, ajustada pelo que este lote gastou de verdade em relação à tabela até agora
+// (fator: 1,25 = gastou 25% a mais que a tabela; só com crescimento medido, entre 0,7 e 2).
+// lote, r: linha do resumo_lotes; alvoKg: peso de venda; racaoRealKg: ração dada neste lote.
+export function previsaoRacao(lote, r, alvoKg) {
+  const qi = Number(lote.quantidade_inicial) || 0;
+  const pmIni = qi > 0 ? Number(lote.peso_inicial_kg) / qi : null;
+  const pm = r && r.ultimo_peso_medio_kg != null ? Number(r.ultimo_peso_medio_kg) : pmIni;
+  if (!(pm > 0) || !(alvoKg > 0)) return null;
+  const vivos = vivosDoLote(lote, r);
+  const agora = racaoCertaAgora(pm);
+  if (pm >= alvoKg || !(vivos > 0)) return { pronto: pm >= alvoKg, faltaKg: 0, tabelaKg: 0, fator: null, agora, vivos, pmKg: pm, alvoKg };
+  const tabelaKg = racaoTabelaPorPeixe(pm, alvoKg) * vivos;
+  let fator = null;
+  const real = Number(r && r.racao_kg) || 0;
+  if (pmIni > 0 && pm > pmIni * 1.2 && real > 0) {
+    const esperado = racaoTabelaPorPeixe(pmIni, pm) * ((qi + vivos) / 2); // média dos peixes no período
+    if (esperado > 0) fator = Math.min(2, Math.max(0.7, real / esperado));
+  }
+  return { pronto: false, faltaKg: tabelaKg * (fator || 1), tabelaKg, fator, agora, vivos, pmKg: pm, alvoKg };
 }
