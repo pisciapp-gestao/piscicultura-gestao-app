@@ -1427,14 +1427,6 @@ a.acao:active, .rl-tq:active { transform: scale(.98); }
 .pedidos-resp .esq { flex: 1; min-width: 0; display: grid; gap: .1rem; }
 .pedidos-resp .sit { flex: none; }
 
-<<<<<<< HEAD
-/* povoamentos do lote (1º + outras datas), dentro da dobra do lote */
-.povoamentos { margin-top: .6rem; padding-top: .5rem; border-top: 1px solid var(--linha, #e3e9e5); }
-.povoamentos .pov-tit { margin: 0 0 .2rem; font-size: .8rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--mudo, #5b6b64); }
-.pov-lista li { gap: .5rem; }
-.pov-bts { display: inline-flex; gap: .4rem; flex-shrink: 0; }
-.povoamentos > .btn { margin-top: .5rem; }
-=======
 /* ---------- transferência de peixes (sql/37, 16/11/2026) ---------- */
 .tf-de { display: flex; justify-content: space-between; align-items: center; gap: .8rem; }
 .tf-de > div { min-width: 0; }
@@ -1484,4 +1476,10 @@ details.fechando[open] > summary::after { transform: rotate(45deg) translateY(-2
 .ra-agora { background: var(--card); box-shadow: inset 0 0 0 1px var(--linha); }
 .ra-agora > b { font-size: 1.25rem; padding-top: .15rem; }
 .ra-tile > small { font-size: .78rem; color: var(--tinta-2); line-height: 1.35; }
->>>>>>> origin/main
+
+/* povoamentos do lote (1º + outras datas), dentro da dobra do lote */
+.povoamentos { margin-top: .6rem; padding-top: .5rem; border-top: 1px solid var(--linha); }
+.povoamentos .pov-tit { margin: 0 0 .2rem; font-size: .8rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--tinta-2); }
+.pov-lista li { gap: .5rem; }
+.pov-bts { display: inline-flex; gap: .4rem; flex-shrink: 0; }
+.povoamentos > .btn { margin-top: .5rem; }
