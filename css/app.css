@@ -1476,3 +1476,10 @@ details.fechando[open] > summary::after { transform: rotate(45deg) translateY(-2
 .ra-agora { background: var(--card); box-shadow: inset 0 0 0 1px var(--linha); }
 .ra-agora > b { font-size: 1.25rem; padding-top: .15rem; }
 .ra-tile > small { font-size: .78rem; color: var(--tinta-2); line-height: 1.35; }
+
+/* povoamentos do lote (1º + outras datas), dentro da dobra do lote */
+.povoamentos { margin-top: .6rem; padding-top: .5rem; border-top: 1px solid var(--linha); }
+.povoamentos .pov-tit { margin: 0 0 .2rem; font-size: .8rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--tinta-2); }
+.pov-lista li { gap: .5rem; }
+.pov-bts { display: inline-flex; gap: .4rem; flex-shrink: 0; }
+.povoamentos > .btn { margin-top: .5rem; }
