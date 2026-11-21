@@ -118,12 +118,17 @@ export async function renderRelatorios(ctx, el) {
       ]);
       // estoque igual ao da Início: ração que ficou negativa não desconta da outra (77 → 78 sacos),
       // e a duração usa a ração de engorda; numa fazenda nova (sem 7 dias), o ritmo de hoje
+      // fazenda com rações cadastradas (sql/39): o total é a soma das rações e a duração é a da que acaba primeiro
+      const porRacao = !!(saldosTipo && saldosTipo.porRacao);
+      const somaR = (k, pos) => (saldosTipo.linhas || []).reduce((t, x) => t + (pos ? Math.max(0, Number(x[k]) || 0) : Number(x[k]) || 0), 0);
       const tiposR = saldosTipo && saldosTipo.porTipo ? saldosTipo.linhas : null;
       const saldo = saldoTotal ? { ...saldoTotal, ...(tiposR ? { saldo_kg: tiposR.reduce((t, x) => t + Math.max(0, Number(x.saldo_kg) || 0), 0) } : {}) } : saldoTotal;
       const engorda = tiposR ? (tiposR.find((x) => x.tipo_racao === 'engorda') || tiposR[0]) : saldoTotal;
       const tipoDoTanque = (tid) => { const l = lotes.find((x) => x.ativo && x.tanque_id === tid); return l && ['alevinagem', 'bercario'].includes(l.tipo) ? 'alevino' : 'engorda'; };
       const hojeKgEng = (linhas || []).filter((r) => r.data === hoje && (!tiposR || tipoDoTanque(r.tanque_id) === 'engorda')).reduce((t, r) => t + Number(r.quantidade_kg || 0), 0);
-      const ritmoHoje = !(Number(engorda && engorda.consumo_7d_kg) > 0) && hojeKgEng > 0;
+      const ritmoHoje = !porRacao && !(Number(engorda && engorda.consumo_7d_kg) > 0) && hojeKgEng > 0;
+      const saldoPdf = porRacao ? { saldo_kg: somaR('saldo_kg', true), total_comprado_kg: somaR('total_comprado_kg'), total_consumido_kg: somaR('total_consumido_kg') } : saldo;
+      const refSit = porRacao ? saldosTipo.linhas[0] : engorda;
       const precoKg = ctx.verDinheiro() ? precoMedioKg(compras) : null;
       const nomeDe = (tid) => (tanques.find((t) => t.id === tid) || {}).nome || '';
       const ativos = lotes.filter((l) => l.ativo);
@@ -139,8 +144,9 @@ export async function renderRelatorios(ctx, el) {
       const racaoTanque = tanques.filter((t) => porTanque.has(t.id)).map((t) => ({ nome: t.nome, kg: porTanque.get(t.id) }))
         .sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR', { numeric: true, sensitivity: 'base' }));
       const doc = gerarPdfFazenda(jsPDF, {
-        logo: ctx.state.ref.logo || null, fazenda: (ctx.state.perfil.fazendas && ctx.state.perfil.fazendas.nome) || 'Piscicultura', geradoEm: hoje, kgSaco: kgS, gerir, dinheiro: ctx.verDinheiro(), fontes, saldo: saldo || {},
-        sit: situacaoEstoque(engorda && engorda.saldo_kg, ritmoHoje ? hojeKgEng * 7 : engorda && engorda.consumo_7d_kg, ESTOQUE_ATENCAO_DIAS, ESTOQUE_CRITICO_DIAS), ritmoHoje, soEngorda: !!tiposR,
+        logo: ctx.state.ref.logo || null, fazenda: (ctx.state.perfil.fazendas && ctx.state.perfil.fazendas.nome) || 'Piscicultura', geradoEm: hoje, kgSaco: kgS, gerir, dinheiro: ctx.verDinheiro(), fontes, saldo: saldoPdf || {},
+        sit: situacaoEstoque(refSit && refSit.saldo_kg, ritmoHoje ? hojeKgEng * 7 : refSit && refSit.consumo_7d_kg, ESTOQUE_ATENCAO_DIAS, ESTOQUE_CRITICO_DIAS), ritmoHoje, soEngorda: !!tiposR,
+        racaoQueAcaba: porRacao && refSit ? refSit.nome : null,
         lotes: detalhes, racaoDia, racaoTanque, precoKg, ultimaContagem: contagens[0] || null,
       });
       bf.disabled = false; bf.innerHTML = texto;

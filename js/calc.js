@@ -532,3 +532,25 @@ export function previsaoRacao(lote, r, alvoKg) {
   }
   return { pronto: false, faltaKg: tabelaKg * (fator || 1), tabelaKg, fator, agora, vivos, pmKg: pm, alvoKg };
 }
+
+// Qual ração cadastrada (sql/39) corresponde à ração que a tabela de alimentação indica.
+// Compara a proteína (28%) e o grão (6 mm): "28% proteína · 10 mm" acha "28% · 6/10 mm". "Inicial" acha "Inicial".
+// Se o grão não bater com nenhuma, vale a única com a mesma proteína. Sem certeza, devolve null (sem etiqueta).
+function partesRacao(nome) {
+  const t = String(nome || '').toLowerCase();
+  const m = /(\d+(?:[.,]\d+)?)\s*%/.exec(t);
+  const prot = m ? Number(m[1].replace(',', '.')) : null;
+  const resto = m ? t.replace(m[0], ' ') : t;
+  const graos = (resto.match(/\d+(?:[.,]\d+)?/g) || []).map((x) => Number(x.replace(',', '.')));
+  return { prot, inicial: /inicial/.test(t), graos };
+}
+export function racaoDaTabela(nomeTabela, racoes) {
+  if (!nomeTabela || !Array.isArray(racoes) || !racoes.length) return null;
+  const a = partesRacao(nomeTabela);
+  const mesmas = racoes.filter((r) => { const b = partesRacao(r.nome); return a.prot != null ? b.prot === a.prot : a.inicial && b.inicial; });
+  if (!mesmas.length) return null;
+  const comGrao = mesmas.filter((r) => partesRacao(r.nome).graos.some((g) => a.graos.some((x) => Math.abs(x - g) < 0.01)));
+  if (comGrao.length === 1) return comGrao[0];
+  if (comGrao.length > 1) return null;
+  return mesmas.length === 1 ? mesmas[0] : null;
+}

@@ -15,6 +15,7 @@ export function renderMais(ctx, el) {
   const grupos = [
     ['No dia a dia', [
       ['#/estoque', 'estoque', 'Estoque de ração', gerir ? 'Saldo, compras e contagem' : 'Saldo de ração'],
+      gerir && ['#/racoes', 'estoque', 'Rações', 'As rações que a fazenda compra (o tratador escolhe em cada trato)'],
       gerir && ['#/despesas', 'estoque', 'Despesas gerais', 'Energia, mão de obra e outros custos'],
       ['#/meus', 'lancar', 'Meus lançamentos', 'Últimos 7 dias: desfazer, corrigir ou pedir correção'],
       gerir && ['#/pedidos', 'historico', 'Pedidos de correção', 'Aprovar ou recusar o que a equipe pediu para corrigir'],
