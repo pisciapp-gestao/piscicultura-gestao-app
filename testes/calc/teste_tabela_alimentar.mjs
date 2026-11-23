@@ -1,19 +1,19 @@
-// Tabela Socil (enviada pelo cliente piloto, 16/11/2026): ração do dia, ração certa e quanto falta até vender.
-// Rodar: node testes/calc/teste_socil.mjs
+// Tabela de alimentação do tambaqui (enviada pelo cliente piloto, 16/11/2026): ração do dia, ração certa e quanto falta até vender.
+// Rodar: node testes/calc/teste_tabela_alimentar.mjs
 import assert from 'node:assert/strict';
 import { racaoTabelaPorPeixe, racaoCertaAgora, previsaoRacao, sugestaoRacao } from '../../js/calc.js';
-import { SOCIL, TAXA_RACAO } from '../../js/config.js';
+import { TABELA_ALIMENTAR, TAXA_RACAO } from '../../js/config.js';
 const perto = (a, b, m, d = 0.5) => assert.ok(Math.abs(a - b) <= d, `${m}: ${a} ≠ ${b}`);
 const ok = (m) => console.log('OK   ' + m);
 
-assert.equal(SOCIL.length, 52); perto(SOCIL.reduce((s, r) => s + r[6], 0), 230886, 'soma da tabela');
+assert.equal(TABELA_ALIMENTAR.length, 52); perto(TABELA_ALIMENTAR.reduce((s, r) => s + r[6], 0), 230886, 'soma da tabela');
 ok('52 semanas, 230.886 kg para 40.000 peixes (igual ao papel)');
 perto(racaoTabelaPorPeixe(0.002, 3.6) * 40000, 230886, 'tabela inteira');
 ok('de 2 g a 3,6 kg a conta devolve a tabela inteira');
 perto(racaoTabelaPorPeixe(0.264, 3.5) * 5092 / 25, 1101, 'Mucajá', 1);
 ok('Mucajá: 5.092 peixes de 264 g até 3,5 kg = ~1.101 sacos (a conta mostrada ao Guilherme)');
-assert.equal(racaoCertaAgora(1.6).racao, 'Sport 28 · 10 mm'); assert.equal(racaoCertaAgora(0.03).racao, 'Alevinos 45 · 2,6 mm'); assert.equal(racaoCertaAgora(0.03).tratos, 4);
-ok('ração certa: 1,6 kg → Sport 28 10 mm; 30 g → Alevinos 45, 4 tratos');
+assert.equal(racaoCertaAgora(1.6).racao, '28% proteína · 10 mm'); assert.equal(racaoCertaAgora(0.03).racao, '45% proteína · 2,6 mm'); assert.equal(racaoCertaAgora(0.03).tratos, 4);
+ok('ração certa: 1,6 kg → 28% proteína 10 mm; 30 g → 45% proteína, 4 tratos');
 const s = sugestaoRacao([{ id: 'a', quantidade_inicial: 40000, peso_inicial_kg: 40000 * 3 }], { a: { ultimo_peso_medio_kg: 3, mortos: 0, despescados: 0 } }, TAXA_RACAO);
 perto(s.kg, 960, 'ração do dia');
 ok('ração do dia: 40.000 peixes de 3 kg × 0,8% = 960 kg (a tabela antiga dava 1.800)');

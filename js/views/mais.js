@@ -15,6 +15,7 @@ export function renderMais(ctx, el) {
   const grupos = [
     ['No dia a dia', [
       ['#/estoque', 'estoque', 'Estoque de ração', gerir ? 'Saldo, compras e contagem' : 'Saldo de ração'],
+      gerir && ['#/racoes', 'estoque', 'Rações', 'As rações que a fazenda compra (o tratador escolhe em cada trato)'],
       gerir && ['#/despesas', 'estoque', 'Despesas gerais', 'Energia, mão de obra e outros custos'],
       ['#/meus', 'lancar', 'Meus lançamentos', 'Últimos 7 dias: desfazer, corrigir ou pedir correção'],
       gerir && ['#/pedidos', 'historico', 'Pedidos de correção', 'Aprovar ou recusar o que a equipe pediu para corrigir'],
@@ -65,7 +66,7 @@ export function renderMais(ctx, el) {
     ${p.papel === 'dono' ? `<details class="card form-dobra">
       <summary><span><b>Peso de venda</b><small>${state.ref.pesoVenda ? `${fmtNum(state.ref.pesoVenda, state.ref.pesoVenda % 1 ? 1 : 0)} kg por peixe` : 'não informado'}</small></span></summary>
       <div class="form">
-      <small style="display:block">Com que peso vocês vendem o peixe. O app usa para dizer quanto falta de ração até vender, pela tabela Socil. Cada tanque pode ter o seu próprio (na tela do tanque, em "Peso de venda").</small>
+      <small style="display:block">Com que peso vocês vendem o peixe. O app usa para dizer quanto falta de ração até vender, pela tabela de alimentação. Cada tanque pode ter o seu próprio (na tela do tanque, em "Peso de venda").</small>
       <form id="f-venda" class="saco-linha"><label class="saco-campo"><span>Peso de cada peixe</span>
         <span class="com-sufixo"><input id="pesovenda" type="text" inputmode="decimal" maxlength="6" placeholder="Ex.: 3,5" value="${state.ref.pesoVenda ? String(state.ref.pesoVenda).replace('.', ',') : ''}" required><em>kg</em></span></label>
       <button class="btn primario" type="submit">Salvar</button></form></div></details>` : ''}

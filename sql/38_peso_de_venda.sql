@@ -3,7 +3,7 @@
 -- Rode no SQL Editor do Supabase. Pode rodar de novo sem estragar nada.
 --
 -- Pedido do cliente piloto (16/11/2026): com o peso de venda, o app diz quanto falta de ração até vender
--- (pela tabela Socil). Um peso para a fazenda toda e, se quiser, um próprio por tanque (a realidade de um
+-- (pela tabela de alimentação). Um peso para a fazenda toda e, se quiser, um próprio por tanque (a realidade de um
 -- tanque pode ser diferente da do outro). Tanque sem peso próprio usa o da fazenda.
 --  * o da fazenda: só o dono muda (como o peso do saco);
 --  * o do tanque: dono e gerente (como o nome e a área do tanque).

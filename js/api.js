@@ -2,6 +2,13 @@
 import * as db from './db.js';
 import { uuid, traduzErro, hojeISO, ehErroDeRede } from './util.js';
 
+// ordem das rações na tela: na sequência em que o peixe passa por elas (fase, depois proteína de maior para menor;
+// sem número, como "Inicial", vem primeiro). Ex.: Inicial · 45% · 36% · 32% · 28%.
+const FASE_ORDEM = { alevino: 0, recria: 1, engorda: 2 };
+const proteina = (nome) => { const m = /(\d+(?:[.,]\d+)?)\s*%/.exec(nome || ''); return m ? Number(m[1].replace(',', '.')) : 1000; };
+export const ordemRacoes = (a, b) => (FASE_ORDEM[a.fase] ?? 3) - (FASE_ORDEM[b.fase] ?? 3) || proteina(b.nome) - proteina(a.nome)
+  || String(a.nome).localeCompare(String(b.nome), 'pt-BR', { numeric: true });
+
 export class ErroApi extends Error {
   constructor(original) {
     super(traduzErro(original));
@@ -175,6 +182,27 @@ export function criarApi(client) {
     async biometriaInicial(loteId, pesoMedioKg, userId, data) {
       ok(await client.from('biometrias').insert({ id: uuid(), uuid_local: uuid(), lote_id: loteId, data, peso_amostra_kg: Math.round(pesoMedioKg * 1000) / 1000, quantidade_amostrada: 1, registrado_por: userId }));
     },
+    // povoamentos extras do lote (peixes que entraram em outra data, sql/40). O banco soma no lote sozinho.
+    // Sem o sql/40 rodado, responde lista vazia (a tela segue funcionando só com o 1º povoamento).
+    async povoamentos(loteIds) {
+      if (!loteIds || !loteIds.length) return [];
+      const r = await client.from('povoamentos').select('id,lote_id,data,quantidade,peso_total_kg').in('lote_id', loteIds).order('data');
+      if (r.error) return [];
+      return r.data || [];
+    },
+    async adicionarPovoamento(p, userId) {
+      const r = await client.from('povoamentos').insert({ id: uuid(), ...p, registrado_por: userId });
+      if (r.error && /povoamentos/i.test(r.error.message || '') && /exist|schema|relation|find/i.test(r.error.message || '')) throw new Error('Povoamento em outra data ainda não foi ativado neste sistema (falta rodar o sql/40 no Supabase).');
+      ok(r);
+    },
+    async corrigirPovoamento(id, campos) {
+      const d = ok(await client.from('povoamentos').update(campos).eq('id', id).select('id'));
+      if (!d || !d.length) throw new Error('Não foi possível corrigir. Só o dono ou o gerente corrige povoamentos.');
+    },
+    async excluirPovoamento(id) {
+      const d = ok(await client.from('povoamentos').delete().eq('id', id).select('id'));
+      if (!d || !d.length) throw new Error('Não foi possível excluir. Só o dono ou o gerente exclui povoamentos.');
+    },
     // exclusões definitivas (só o dono; o RLS barra os demais). Apagam em cascata os lançamentos.
     async excluirLote(id) {
       const d = ok(await client.from('lotes').delete().eq('id', id).select('id'));
@@ -250,8 +278,18 @@ export function criarApi(client) {
       }
       return s;
     },
-    // saldo de cada ração (engorda e alevino, sql/17). Sem o sql/17: uma linha só, o total, contada como engorda.
+    // saldo de cada ração. Fazenda com rações cadastradas (sql/39): uma linha por ração, a mais apertada primeiro
+    // (a que acaba antes entre as que estão sendo dadas), em porRacao. Senão: engorda e alevino (sql/17) ou só o total.
     async saldosRacao() {
+      const pr = await client.rpc('saldo_por_racao');
+      if (!pr.error && Array.isArray(pr.data) && pr.data.length) {
+        const ordem = pr.data.slice().sort((a, b) => (a.ativa === b.ativa ? 0 : a.ativa ? -1 : 1) || ordemRacoes(a, b)).map((x, i) => ({ ...x, tipo_racao: `r:${x.racao_id}`, ordem: i }));
+        const dura = (x) => (Number(x.saldo_kg) < 0 ? -1 : Number(x.consumo_7d_kg) > 0 ? Number(x.saldo_kg) / (Number(x.consumo_7d_kg) / 7) : Infinity);
+        const linhas = ordem.filter((x) => x.ativa || Number(x.saldo_kg)).sort((a, b) => dura(a) - dura(b) || a.ordem - b.ordem);
+        const r = { porTipo: false, porRacao: true, linhas, racoes: ordem };
+        db.kvSet('saldosRacao', { ...r, em: Date.now() }).catch(() => {});
+        return r;
+      }
       const { data, error } = await client.rpc('saldo_racao_por_tipo');
       let r;
       if (!error && Array.isArray(data) && data.length) r = { porTipo: true, linhas: data };
@@ -260,6 +298,7 @@ export function criarApi(client) {
       return r;
     },
     async consumoDiario(dias = 30, tipo = null) {
+      if (tipo && tipo.startsWith('r:')) return ok(await client.rpc('consumo_diario_racao', { p_dias: dias, p_racao: tipo.slice(2) })) || [];
       if (tipo) {
         const { data, error } = await client.rpc('consumo_diario_tipo', { p_dias: dias, p_tipo: tipo });
         if (!error) return data || [];
@@ -268,10 +307,12 @@ export function criarApi(client) {
     },
     async contagens() {
       const ler = (cols) => client.from('racao_contagens').select(cols).order('criado_em', { ascending: false }).limit(60);
-      const r = await ler('id,data,contado_kg,saldo_sistema_kg,diferenca_kg,obs,criado_em,tipo_racao');
+      let r = await ler('id,data,contado_kg,saldo_sistema_kg,diferenca_kg,obs,criado_em,tipo_racao,racao_id'); // racao_id: sql/39
+      if (r.error) r = await ler('id,data,contado_kg,saldo_sistema_kg,diferenca_kg,obs,criado_em,tipo_racao');
       return (r.error ? ok(await ler('id,data,contado_kg,saldo_sistema_kg,diferenca_kg,obs,criado_em')) : r.data) || [];
     },
     async registrarContagem(kg, obs, tipo = null) {
+      if (tipo && tipo.startsWith('r:')) return Number(ok(await client.rpc('registrar_contagem_racao', { p_racao: tipo.slice(2), p_contado_kg: kg, p_obs: obs || null })));
       if (tipo) {
         const r = await client.rpc('registrar_contagem', { p_contado_kg: kg, p_obs: obs || null, p_tipo: tipo });
         if (!r.error) return Number(r.data);
@@ -291,16 +332,33 @@ export function criarApi(client) {
       if (podeGerir) {
         // sacos_nota/sacos_recebidos vêm do sql/14 (conferência de recebimento); sem ele, lê sem as duas colunas
         const ler = (cols) => todos(() => client.from('racao_estoque').select(cols).order('data_compra', { ascending: false }).order('id'));
-        lista = await ler('id,data_compra,quantidade_kg,fornecedor,sacos_nota,sacos_recebidos,tipo_racao') // tipo_racao: sql/17
+        lista = await ler('id,data_compra,quantidade_kg,fornecedor,sacos_nota,sacos_recebidos,tipo_racao,racao_id') // racao_id: sql/39
+          .catch(() => ler('id,data_compra,quantidade_kg,fornecedor,sacos_nota,sacos_recebidos,tipo_racao')) // tipo_racao: sql/17
           .catch(() => ler('id,data_compra,quantidade_kg,fornecedor,sacos_nota,sacos_recebidos'))
           .catch(() => ler('id,data_compra,quantidade_kg,fornecedor'));
         // valor pago (sql/23): não sai mais pela tabela; vem de racao_estoque_visivel(), que só entrega ao dono
         await this.juntarValorPago(lista);
       } else {
         lista = ok(await client.rpc('racao_estoque_visivel'));
+        // a ração de cada compra (sql/39) vem da tabela, que libera essa coluna para todos da fazenda
+        const rs = await client.from('racao_estoque').select('id,racao_id');
+        if (!rs.error && Array.isArray(rs.data)) { const m = new Map(rs.data.map((x) => [x.id, x.racao_id])); for (const c of lista) c.racao_id = m.get(c.id) || null; }
         lista.sort((a, b) => (a.data_compra < b.data_compra ? 1 : -1));
       }
       return lista;
+    },
+    // ----- rações da fazenda (sql/39): a lista que o tratador escolhe -----
+    async racoes() {
+      const r = await client.from('racoes').select('id,nome,fase,cor,ativa').order('nome');
+      if (r.error) return null; // banco sem o sql/39: o app segue com engorda e alevino
+      const lista = (r.data || []).sort(ordemRacoes);
+      db.kvSet('racoes', lista).catch(() => {}); // o lançamento sem internet usa esta cópia
+      return lista;
+    },
+    async salvarRacao(r) {
+      const dados = { nome: String(r.nome).trim(), fase: r.fase, cor: r.cor, ativa: r.ativa !== false };
+      if (r.id) ok(await client.from('racoes').update(dados).eq('id', r.id));
+      else ok(await client.from('racoes').insert({ id: uuid(), fazenda_id: r.fazenda_id, ...dados }));
     },
     async registrarCompra(c) {
       let linha = { id: uuid(), ...c };
@@ -320,6 +378,14 @@ export function criarApi(client) {
     },
     // importar a cópia baixada em Mais (sql/14). Devolve quantos registros voltaram por tabela.
     async importarCopia(copia) {
+      // as rações da fazenda (sql/39) voltam primeiro: os tratos, compras e contagens apontam para elas
+      const rs = copia && copia.tabelas && Array.isArray(copia.tabelas.racoes) ? copia.tabelas.racoes : [];
+      if (rs.length) {
+        const fz = ((copia.tabelas.fazendas || [])[0] || {}).id; // a cópia é de uma fazenda só (o banco confere se é a sua)
+        const linhas = rs.filter((x) => x && x.id && x.nome && x.fazenda_id === fz)
+          .map(({ id, fazenda_id, nome, fase, cor, ativa }) => ({ id, fazenda_id, nome, fase, cor, ativa }));
+        if (linhas.length) await client.from('racoes').upsert(linhas, { onConflict: 'id', ignoreDuplicates: true });
+      }
       const { data, error } = await client.rpc('importar_copia', { p_copia: copia });
       if (error && (error.code === 'PGRST202' || /importar_copia/i.test(error.message || ''))) throw new Error('A importação ainda não foi ativada neste sistema (falta rodar o sql/14 no Supabase).');
       if (error) throw new ErroApi(error);
@@ -466,14 +532,14 @@ export function criarApi(client) {
 
     // ----- cópia de segurança (dono): tudo o que a fazenda tem, tabela por tabela -----
     async exportarTudo() {
-      const tabelas = ['fazendas', 'usuarios', 'tanques', 'usuario_tanques', 'lotes', 'biometrias', 'mortalidade', 'despescas', 'despesca_vendas', 'manejos', 'qualidade_agua', 'custos_lote', 'despesas_gerais', 'racao_consumo', 'racao_estoque', 'racao_contagens'];
+      const tabelas = ['fazendas', 'usuarios', 'tanques', 'usuario_tanques', 'lotes', 'povoamentos', 'biometrias', 'mortalidade', 'despescas', 'despesca_vendas', 'manejos', 'qualidade_agua', 'custos_lote', 'despesas_gerais', 'racoes', 'racao_consumo', 'racao_estoque', 'racao_contagens'];
       const out = { gerado_em: new Date().toISOString(), versao: 1, tabelas: {}, sem_acesso: [] };
       for (const t of tabelas) {
         try {
           out.tabelas[t] = await todos(() => {
             // fazendas: o preço do peixe não sai mais em "select *" (sql/22); vai pelas colunas e o preço à parte
             const colunas = { fazendas: 'id,nome,criado_em,teste_ate,logo,kg_saco,bloqueada',
-              racao_estoque: 'id,fazenda_id,data_compra,quantidade_kg,fornecedor,criado_em,sacos_nota,sacos_recebidos,tipo_racao' }[t] || '*';
+              racao_estoque: 'id,fazenda_id,data_compra,quantidade_kg,fornecedor,criado_em,sacos_nota,sacos_recebidos,tipo_racao,racao_id' }[t] || '*';
             const q = client.from(t).select(colunas);
             return t === 'usuario_tanques' ? q.order('usuario_id').order('tanque_id') : q.order('id');
           });

@@ -16,6 +16,7 @@ import { renderHome, renderTanqueDetalhe } from './views/home.js';
 import { renderLancar } from './views/lancar.js';
 import { renderTanques, renderTanque } from './views/tanques.js';
 import { renderEstoque } from './views/estoque.js';
+import { renderRacoes } from './views/racoes.js';
 import { renderRelatorios, renderRelatorioLote, renderRacaoDia } from './views/relatorio.js';
 import { renderEquipe } from './views/equipe.js';
 import { renderPlano } from './views/plano.js';
@@ -545,6 +546,7 @@ async function rotear() {
       case 'tanques': await renderTanques(ctx, el); break;
       case 'tanque': await renderTanque(ctx, el, partes[0], params); break;
       case 'estoque': await renderEstoque(ctx, el); break;
+      case 'racoes': await renderRacoes(ctx, el); break;
       case 'equipe': await renderEquipe(ctx, el); break;
       case 'plano': await renderPlano(ctx, el); break;
       case 'historico': await renderHistorico(ctx, el); break;

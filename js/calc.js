@@ -1,6 +1,6 @@
 // Cálculos do relatório de um lote (puros, testáveis em Node)
 import { diasEntre, fmtInt, fmtNum, pesoMedioTxt } from './util.js';
-import { AGUA_TAMBAQUI as AG, SOCIL, SOCIL_PEIXES } from './config.js';
+import { AGUA_TAMBAQUI as AG, TABELA_ALIMENTAR, TABELA_PEIXES } from './config.js';
 
 const soma = (arr, k) => arr.reduce((s, x) => s + Number(x[k] || 0), 0);
 
@@ -487,24 +487,24 @@ export function custoAlevinoComTransf(lotes, custoDe, transfs) {
   return out;
 }
 
-// ----- ração pela tabela Socil (pedido do cliente piloto, 16/11/2026) -----
+// ----- ração pela tabela de alimentação (pedido do cliente piloto, 16/11/2026) -----
 // Ração que UM peixe come pela tabela para ir de pmIni a pmFim (kg). Em cada semana da tabela, a ração por grama
 // ganho é a da semana (kg na semana ÷ 40.000 peixes ÷ gramas ganhos). Acima de 3,6 kg segue o ritmo da última semana.
-export function racaoTabelaPorPeixe(pmIniKg, pmFimKg, tabela = SOCIL) {
+export function racaoTabelaPorPeixe(pmIniKg, pmFimKg, tabela = TABELA_ALIMENTAR) {
   const a = Number(pmIniKg) * 1000, b = Number(pmFimKg) * 1000;
   if (!(a >= 0) || !(b > a)) return 0;
   let kg = 0;
   for (const [, pi, pf, , , , semanaKg] of tabela) {
     const lo = Math.max(a, pi), hi = Math.min(b, pf);
-    if (hi > lo) kg += (semanaKg / SOCIL_PEIXES) * ((hi - lo) / (pf - pi));
+    if (hi > lo) kg += (semanaKg / TABELA_PEIXES) * ((hi - lo) / (pf - pi));
   }
   const ult = tabela[tabela.length - 1];
-  if (b > ult[2]) kg += (ult[6] / SOCIL_PEIXES / (ult[2] - ult[1])) * (b - Math.max(a, ult[2]));
+  if (b > ult[2]) kg += (ult[6] / TABELA_PEIXES / (ult[2] - ult[1])) * (b - Math.max(a, ult[2]));
   return kg;
 }
 
 // Linha da tabela para o peso médio atual: qual ração dar e quantas vezes por dia
-export function racaoCertaAgora(pmKg, tabela = SOCIL) {
+export function racaoCertaAgora(pmKg, tabela = TABELA_ALIMENTAR) {
   if (!(pmKg > 0)) return null;
   const g = pmKg * 1000;
   const l = tabela.find(([, , pf]) => g <= pf) || tabela[tabela.length - 1];
@@ -531,4 +531,26 @@ export function previsaoRacao(lote, r, alvoKg) {
     if (esperado > 0) fator = Math.min(2, Math.max(0.7, real / esperado));
   }
   return { pronto: false, faltaKg: tabelaKg * (fator || 1), tabelaKg, fator, agora, vivos, pmKg: pm, alvoKg };
+}
+
+// Qual ração cadastrada (sql/39) corresponde à ração que a tabela de alimentação indica.
+// Compara a proteína (28%) e o grão (6 mm): "28% proteína · 10 mm" acha "28% · 6/10 mm". "Inicial" acha "Inicial".
+// Se o grão não bater com nenhuma, vale a única com a mesma proteína. Sem certeza, devolve null (sem etiqueta).
+function partesRacao(nome) {
+  const t = String(nome || '').toLowerCase();
+  const m = /(\d+(?:[.,]\d+)?)\s*%/.exec(t);
+  const prot = m ? Number(m[1].replace(',', '.')) : null;
+  const resto = m ? t.replace(m[0], ' ') : t;
+  const graos = (resto.match(/\d+(?:[.,]\d+)?/g) || []).map((x) => Number(x.replace(',', '.')));
+  return { prot, inicial: /inicial/.test(t), graos };
+}
+export function racaoDaTabela(nomeTabela, racoes) {
+  if (!nomeTabela || !Array.isArray(racoes) || !racoes.length) return null;
+  const a = partesRacao(nomeTabela);
+  const mesmas = racoes.filter((r) => { const b = partesRacao(r.nome); return a.prot != null ? b.prot === a.prot : a.inicial && b.inicial; });
+  if (!mesmas.length) return null;
+  const comGrao = mesmas.filter((r) => partesRacao(r.nome).graos.some((g) => a.graos.some((x) => Math.abs(x - g) < 0.01)));
+  if (comGrao.length === 1) return comGrao[0];
+  if (comGrao.length > 1) return null;
+  return mesmas.length === 1 ? mesmas[0] : null;
 }
