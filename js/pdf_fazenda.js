@@ -29,7 +29,7 @@ export function gerarPdfFazenda(jsPDF, d) {
   y = 53;
 
   const vivos = lotes.reduce((s, l) => s + (l.c.vivos || 0), 0);
-  const biomassa = lotes.reduce((s, l) => s + (l.c.biomassaAtual || 0), 0);
+  const biomassa = lotes.reduce((s, l) => s + (l.c.biomassaEstimada ?? l.c.biomassaAtual ?? 0), 0);
   const racao30 = racaoDia.reduce((s, r) => s + r.kg, 0);
   const mortos = lotes.reduce((s, l) => s + (l.c.mortos || 0), 0);
   const inicial = lotes.reduce((s, l) => s + (Number(l.lote.quantidade_inicial) || 0), 0);
@@ -86,13 +86,17 @@ export function gerarPdfFazenda(jsPDF, d) {
   if (lotes.length) {
     const corpo = lotes.map((l) => [
       l.nomeTanque, `${l.lote.especie} (${{ bercario: 'berç.', alevinagem: 'alev.', recria: 'recr.', engorda: 'eng.' }[l.lote.tipo] || l.lote.tipo})`, fmtInt(l.c.diasCultivo),
-      l.c.pmAtualG != null ? n(l.c.pmAtualG, 0) : '-', fmtInt(l.c.vivos), fmtInt(l.c.mortos), l.c.sobrevivencia != null ? `${fmtPct(l.c.sobrevivencia)}%` : '-',
-      l.c.biomassaAtual != null ? n(l.c.biomassaAtual, 0) : '-', l.c.ca != null ? n(l.c.ca, 2) : '-',
+      (l.c.pmEstimadoG ?? l.c.pmAtualG) != null ? n(l.c.pmEstimadoG ?? l.c.pmAtualG, 0) + (l.c.pmEstimadoG != null ? '*' : '') : '-', fmtInt(l.c.vivos), fmtInt(l.c.mortos), l.c.sobrevivencia != null ? `${fmtPct(l.c.sobrevivencia)}%` : '-',
+      (l.c.biomassaEstimada ?? l.c.biomassaAtual) != null ? n(l.c.biomassaEstimada ?? l.c.biomassaAtual, 0) + (l.c.biomassaEstimada != null ? '*' : '') : '-', l.c.ca != null ? n(l.c.ca, 2) : '-',
     ]);
     tabela(doc, y, [['TANQUE', 'ESPÉCIE', 'DIAS', 'PESO (g)', 'VIVOS', 'MORTOS', 'SOBREV.', 'BIOMASSA', 'CONV.']], corpo, ['left', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right'], [30, 34]);
     y = doc.lastAutoTable.finalY + 3;
     txt('Peso, vivos, biomassa (kg) e conversão são estimativas a partir da última biometria e da mortalidade lançada. Conversão: kg de ração por kg ganho.', M, y + 2, { size: 7.5, color: COR.mudo });
     y += 10;
+    if (lotes.some((l) => l.c.pmEstimadoG != null)) {
+      txt('* Peso de hoje estimado pela ração dada desde a última biometria (tabela de alimentação do tambaqui, ajustada a cada lote).', M, y - 3, { size: 7.5, color: COR.mudo });
+      y += 5;
+    }
   } else { txt('Nenhum lote ativo.', M, y + 1, { size: 9, color: COR.mudo }); y += 10; }
 
   // ---------- 3. ração ----------

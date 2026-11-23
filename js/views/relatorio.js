@@ -42,7 +42,7 @@ export function montarCsv(lote, nomeTanque, calc, bios, mort, rac, quem, desp = 
   L.push(['Relatório do lote'], ['Tanque', nomeTanque], ['Fase', ROTULO_TIPO[lote.tipo] || lote.tipo], ['Espécie', lote.especie],
     ['Entrada', fmtData(lote.data_entrada)], ['Peixes iniciais', lote.quantidade_inicial], ['Peso total inicial (kg)', csvNum(lote.peso_inicial_kg)],
     [], ['RESUMO'], ['Dias de cultivo', calc.diasCultivo], ['Peixes vivos (estimado)', calc.vivos], ['Mortos', calc.mortos],
-    ['Ração total (kg)', csvNum(calc.racaoTotal)], ['Peso médio atual (g)', csvNum(calc.pmAtualG, 1)],
+    ['Ração total (kg)', csvNum(calc.racaoTotal)], ['Peso médio atual (g)', csvNum(calc.pmAtualG, 1)], ...(calc.pmEstimadoG != null ? [['Peso médio hoje estimado pela ração (g)', csvNum(calc.pmEstimadoG, 1)], ['Biomassa hoje estimada (kg)', csvNum(calc.biomassaEstimada, 0)]] : []),
     ['Conversão alimentar aparente', csvNum(calc.ca)], ...(calc.custoKgProduzido != null ? [['Custo de ração por kg produzido (R$)', csvNum(calc.custoKgProduzido)]] : []), ['Ganho de peso diário (g/dia)', csvNum(calc.gpd)], [],
     ['RAÇÃO'], ['Data', 'Quantidade (kg)', 'Registrado por']);
   rac.forEach((r) => L.push([fmtData(r.data), csvNum(r.quantidade_kg), quem(r.registrado_por)]));
@@ -267,7 +267,8 @@ export async function renderRelatorioLote(ctx, el, id) {
   // ração que falta até vender (ou passar de fase), pela tabela de alimentação, e a ração certa agora (só lote ativo)
   const blocoRacaoAteVender = () => {
     if (!lote.ativo) return '';
-    const r = { ultimo_peso_medio_kg: c.pmAtualG != null ? c.pmAtualG / 1000 : null, racao_kg: c.racaoTotal, mortos: c.mortos, despescados: c.despescados, transferidos: c.transferidos };
+    // peso de hoje estimado pela ração, quando houver (a ração total já inclui a dada depois da última pesagem)
+    const r = { ultimo_peso_medio_kg: (c.pmEstimadoG ?? c.pmAtualG) != null ? (c.pmEstimadoG ?? c.pmAtualG) / 1000 : null, racao_kg: c.racaoTotal, mortos: c.mortos, despescados: c.despescados, transferidos: c.transferidos };
     const alvo = metaDe(lote, metasDe(ctx.state.ref, {}));
     const pr = previsaoRacao(lote, r, alvo);
     if (!pr) return '';
@@ -298,7 +299,9 @@ export async function renderRelatorioLote(ctx, el, id) {
 
   const painelResumo = () => `
     <div class="card destaques3">
-      ${destaque('Peso médio atual', c.pmAtualG != null ? pesoUnid(c.pmAtualG) : '—', c.pmAtualG != null ? `em ${fmtData(c.dataUltimaBio)}` : 'sem biometria ainda')}
+      ${c.pmEstimadoG != null
+        ? destaque('Peso médio hoje', '≈ ' + pesoUnid(c.pmEstimadoG), `estimado pela ração · ${c.pmAtualG != null ? `pesado ${pesoUnid(c.pmAtualG).replace(/<\/?em>/g, ' ').trim()} em ${fmtData(c.dataUltimaBio)}` : 'sem biometria ainda'}`)
+        : destaque('Peso médio atual', c.pmAtualG != null ? pesoUnid(c.pmAtualG) : '—', c.pmAtualG != null ? `em ${fmtData(c.dataUltimaBio)}` : 'sem biometria ainda')}
       ${destaque('Ração fornecida', unid(fmtNum(c.racaoTotal, 0), 'kg'), `≈ ${fmtNum(c.racaoTotal / kgS, 1)} sacos` + (c.racaoMediaDia != null ? ` · média ${fmtNum(c.racaoMediaDia, 1)} kg/dia` : ''))}
       ${destaque('Conversão alimentar', c.ca != null ? fmtNum(c.ca, 2) : '—', c.ca != null ? 'kg de ração por kg ganho' : c.caAguardaPesagem ? 'lote cadastrado em andamento: aparece depois da próxima pesagem' : c.dataUltimaBio ? 'aparece quando houver ração lançada até a última biometria' : 'precisa de biometria com ganho')}
     </div>
@@ -309,11 +312,13 @@ export async function renderRelatorioLote(ctx, el, id) {
         ${c.transferidos ? linhaNum('Peixes transferidos', fmtInt(c.transferidos), c.tudoTransferido ? 'o tanque foi esvaziado: tudo transferido' : 'foram para outros tanques (não é venda)') : ''}
         ${c.despescados ? linhaNum('Peixes retirados', fmtInt(c.despescados), gerir ? `${fmtNum(c.pesoDespescado, 0)} kg de peso bruto` : '') : ''}
         ${ctx.verDinheiro() && c.despescados ? linhaNum('Receita das despescas', c.receita != null ? fmtBRL(c.receita) : '—', c.receita == null ? 'informe o preço de venda na despesca' : c.despescasSemPreco ? `falta o preço em ${fmtInt(c.despescasSemPreco)} ${c.despescasSemPreco === 1 ? 'despesca' : 'despescas'}` : c.receitaSobreBruto ? 'sobre o peso líquido; sem líquido informado, o bruto' : 'sobre o peso líquido') : ''}
-        ${linhaNum('Biomassa estimada', c.biomassaAtual != null ? fmtNum(c.biomassaAtual, 0) + ' kg' : '—', `na entrada: ${fmtNum(c.biomassaInicial, 0)} kg`)}
+        ${c.biomassaEstimada != null
+          ? linhaNum('Biomassa hoje (estimada)', '≈ ' + fmtNum(c.biomassaEstimada, 0) + ' kg', `${c.biomassaAtual != null ? `na última biometria: ${fmtNum(c.biomassaAtual, 0)} kg · ` : ''}${fmtNum(c.racaoDesdeBio, 0)} kg de ração desde ${fmtData(c.estimadoDesde)}`)
+          : linhaNum('Biomassa estimada', c.biomassaAtual != null ? fmtNum(c.biomassaAtual, 0) + ' kg' : '—', `na entrada: ${fmtNum(c.biomassaInicial, 0)} kg`)}
         ${ctx.verDinheiro() ? linhaNum('Custo de ração', c.custoRacao != null ? fmtBRL(c.custoRacao) : '—', c.custoRacao != null ? 'pelo preço médio pago por kg' : 'registre o valor nas compras') : ''}
         ${ctx.verDinheiro() ? linhaNum('Custo de ração por kg produzido', c.custoKgProduzido != null ? fmtBRL(c.custoKgProduzido) : '—', c.custoKgProduzido != null ? 'ração até a última biometria ÷ peixe que ganhou peso' : 'precisa de preço nas compras e biometria com ganho') : ''}
       </ul></div>
-      <p class="mudo nota">Valores estimados usam o peso médio da última biometria e a mortalidade registrada. Quanto mais biometrias, mais confiável.</p>
+      <p class="mudo nota">${c.pmEstimadoG != null ? 'O peso de hoje é estimado pela ração dada desde a última pesagem, pela tabela de alimentação do tambaqui ajustada ao que este lote gasta de verdade. A próxima biometria corrige. ' : ''}Valores estimados usam o peso médio da última biometria e a mortalidade registrada. Quanto mais biometrias, mais confiável.</p>
     </section>
     ${blocoTransf()}
     ${blocoRacaoAteVender()}

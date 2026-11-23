@@ -114,6 +114,29 @@ export function calcularLote(lote, bios, mort, rac, hoje, precoKg = null, desp =
   // sem ração lançada até a última biometria não há conversão para calcular (mostrar 0,00 enganava)
   const ca = ganhoCA != null && ganhoCA > 0 && racaoCA > 0 ? racaoCA / ganhoCA : null;
 
+  // Peso de HOJE estimado pela ração dada desde a última pesagem (tambaqui, pela tabela de alimentação).
+  // Sem biometria, a base é a entrada (só se a ração foi lançada desde o começo). A próxima biometria corrige.
+  const est = !fechado && lote.ativo && ehTambaqui(lote.especie)
+    ? (() => {
+      const baseData = ultima ? ultima.data : andamento ? null : lote.data_entrada;
+      const pmBase = ultima ? pmAtual : pmInicial;
+      if (!baseData || !(pmBase > 0) || !(baseData < hoje)) return null;
+      const racaoDesde = soma(rac.filter((r) => r.data > baseData && r.data <= hoje), 'quantidade_kg');
+      // quanto este lote gasta em relação à tabela (mesma regra da previsão de ração até vender)
+      // lote cadastrado em andamento: compara a partir da pesagem que marcou o início no app
+      let fator = null;
+      const pmDe = andamento ? (base ? pesoMedioKg(base) : null) : pmInicial;
+      const racaoMedida = andamento ? racaoCA : racaoAteBio;
+      const peixesMedia = andamento ? vivos : (qtdInicial + vivos) / 2;
+      if (ultima && pmDe > 0 && pmAtual > pmDe * 1.2 && racaoMedida > 0) {
+        const esperado = racaoTabelaPorPeixe(pmDe, pmAtual) * peixesMedia;
+        if (esperado > 0) fator = Math.min(2, Math.max(0.7, racaoMedida / esperado));
+      }
+      const pm = pesoPelaRacao(pmBase, racaoDesde, vivos, fator);
+      return pm != null ? { pm, baseData, racaoDesde, fator } : null;
+    })()
+    : null;
+
   const diasCultivo = Math.max(0, diasEntre(lote.data_entrada, hoje));
   const diasAteBio = ultima ? diasEntre(lote.data_entrada, ultima.data) : null;
   const gpd = pmAtual != null && pmInicial != null && diasAteBio > 0 ? ((pmAtual - pmInicial) * 1000) / diasAteBio : null; // g/dia
@@ -151,6 +174,11 @@ export function calcularLote(lote, bios, mort, rac, hoje, precoKg = null, desp =
     custoKgProduzido: precoKg != null && ganhoCA > 0 && racaoCA > 0 ? (racaoCA * precoKg) / ganhoCA : null,
     // lote em andamento sem pesagem depois do início no app: a conversão aparece depois da próxima pesagem
     caAguardaPesagem: andamento && ca == null,
+    // peso de hoje estimado pela ração desde a última pesagem (null: sem ração nova, não é tambaqui ou lote encerrado)
+    pmEstimadoG: est ? est.pm * 1000 : null,
+    biomassaEstimada: est ? vivos * est.pm : null,
+    estimadoDesde: est ? est.baseData : null,
+    racaoDesdeBio: est ? est.racaoDesde : null,
   };
 }
 
@@ -501,6 +529,18 @@ export function racaoTabelaPorPeixe(pmIniKg, pmFimKg, tabela = TABELA_ALIMENTAR)
   const ult = tabela[tabela.length - 1];
   if (b > ult[2]) kg += (ult[6] / TABELA_PEIXES / (ult[2] - ult[1])) * (b - Math.max(a, ult[2]));
   return kg;
+}
+
+// Peso médio (kg) a que a ração dada leva os peixes, pela tabela: acha o peso final em que a ração da tabela por peixe,
+// de pmBase até ele, iguala a ração dada ÷ peixes vivos (corrigida pelo fator do lote: 1,25 = gasta 25% a mais).
+export function pesoPelaRacao(pmBaseKg, racaoKg, vivos, fator = null, tabela = TABELA_ALIMENTAR) {
+  const a = Number(pmBaseKg), r = Number(racaoKg), v = Number(vivos);
+  if (!(a > 0) || !(r > 0) || !(v > 0)) return null;
+  const alvo = r / v / (fator > 0 ? fator : 1);
+  let lo = a, hi = a + 0.05;
+  while (racaoTabelaPorPeixe(a, hi, tabela) < alvo && hi < 50) hi *= 2;
+  for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (racaoTabelaPorPeixe(a, m, tabela) < alvo) lo = m; else hi = m; }
+  return (lo + hi) / 2;
 }
 
 // Linha da tabela para o peso médio atual: qual ração dar e quantas vezes por dia
