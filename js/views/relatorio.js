@@ -298,6 +298,7 @@ export async function renderRelatorioLote(ctx, el, id) {
   };
 
   const painelResumo = () => `
+    ${c.racaoImpossivel ? `<div class="aviso" role="alert"><p style="margin:0"><b>⚠️ Confira a ração lançada.</b> Desde ${fmtData(c.estimadoDesde)} foram lançados ${fmtNum(c.racaoDesdeBio, 0)} kg (${fmtNum(c.racaoDesdeBio / kgS, 0)} sacos), mais do que esses peixes conseguem comer. Algum lançamento deve estar errado: confira em <a href="#/relatorio/${esc(lote.id)}?aba=registros">${gerir ? 'Registros' : 'Lançamentos'}</a>.</p></div>` : ''}
     <div class="card destaques3">
       ${c.pmEstimadoG != null
         ? destaque('Peso médio hoje', '≈ ' + pesoUnid(c.pmEstimadoG), `estimado pela ração · ${c.pmAtualG != null ? `pesado ${pesoUnid(c.pmAtualG).replace(/<\/?em>/g, ' ').trim()} em ${fmtData(c.dataUltimaBio)}` : 'sem biometria ainda'}`)
