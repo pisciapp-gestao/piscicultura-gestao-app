@@ -1,7 +1,7 @@
 // Transferência de peixes entre tanques (pedido do cliente piloto, 16/11/2026; maquete A aprovada).
 // Sai de UM tanque e vai para um ou mais. Destino vazio: nasce um lote novo; destino com peixe: junta no lote de lá.
 // O custo (ração já dada na origem) vai junto, na proporção dos peixes. Não é venda. Só dono e gerente, só com internet.
-import { esc, hojeISO, fmtData, fmtNum, fmtInt, uuid, ROTULO_TIPO, FASES, numDecimal } from '../util.js';
+import { esc, hojeISO, fmtData, fmtNum, fmtInt, uuid, ROTULO_TIPO, FASES, numDecimal, ehErroDeRede } from '../util.js';
 import { confirmar } from '../dialogo.js';
 import { ordemNatural } from './home.js';
 import { PROXIMA_FASE } from './despesca.js';
@@ -33,6 +33,9 @@ export async function renderTransferir(ctx, el, { tanque, segHtml, ligarSeg }) {
   let destinos = []; // [{tanque, qtd, g, tipo}]
   let data = hojeISO();
   let escolhendo = null; // 'origem' | 'destino' | null
+  // um código por transferência, criado ao abrir a tela e mantido nas novas tentativas: se o sinal cair depois que o
+  // banco gravou, tocar em Salvar de novo manda o MESMO código e o banco não grava outra vez (sql/37 confere o grupo)
+  const grupo = uuid();
 
   const lo = () => loteDe(origem);
   const racaoOrigemKg = () => { const r = resumo[(lo() || {}).id]; return r ? Number(r.racao_kg) || 0 : 0; };
@@ -171,16 +174,19 @@ export async function renderTransferir(ctx, el, { tanque, segHtml, ligarSeg }) {
     if (!(await confirmar({ titulo: 'Salvar a transferência?', texto, ok: 'Salvar' }))) return;
     const b = el.querySelector('#b-salvar'); b.disabled = true; b.textContent = 'Salvando…'; mostrar('');
     try {
-      await ctx.api.registrarTransferencia({
-        grupo: uuid(), loteOrigem: lOrig.id, data, esvaziou,
+      const gravados = await ctx.api.registrarTransferencia({
+        grupo, loteOrigem: lOrig.id, data, esvaziou,
         destinos: destinos.map((d) => ({ tanque_id: d.tanque, quantidade: d.qtd, peso_medio_kg: Math.round(d.g * 10) / 10000, tipo: loteDe(d.tanque) ? null : (d.tipo || PROXIMA_FASE[lOrig.tipo] || lOrig.tipo) })),
       });
       await ctx.atualizarRef(true);
-      ctx.toast('Transferência salva', 'ok');
+      // 0 = o banco já tinha este código: a tentativa anterior chegou, mesmo sem a resposta ter voltado
+      ctx.toast(Number(gravados) === 0 ? 'Esta transferência já tinha sido salva na tentativa anterior' : 'Transferência salva', 'ok');
       location.hash = `#/relatorio/${lOrig.id}`;
     } catch (err) {
-      b.disabled = false; b.textContent = 'Salvar transferência';
-      mostrar(/registrar_transferencia|function/.test(err.message || '') ? 'A transferência ainda não está ligada no banco desta fazenda. Avise o suporte.' : (err.message || 'Não foi possível salvar.'));
+      const semSinal = ehErroDeRede(err && err.original);
+      b.disabled = false; b.textContent = semSinal ? 'Tentar de novo' : 'Salvar transferência';
+      mostrar(semSinal ? 'O sinal caiu na hora de salvar e não dá para saber se a transferência chegou. Quando o sinal voltar, toque em "Tentar de novo": se ela já tiver chegado, não será lançada duas vezes.'
+        : /registrar_transferencia|function/.test(err.message || '') ? 'A transferência ainda não está ligada no banco desta fazenda. Avise o suporte.' : (err.message || 'Não foi possível salvar.'));
     }
   }
 
