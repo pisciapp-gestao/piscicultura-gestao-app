@@ -7,7 +7,7 @@ import { pesoMedioKg, avaliarAgua, ehTambaqui } from './calc.js';
 
 export const COR = {
   tinta: [23, 33, 29], mudo: [118, 130, 123], linha: [214, 223, 218], rio: [14, 79, 69], fundo: [240, 246, 243], fundo2: [231, 240, 235],
-  suave: [160, 184, 172], ambar: [168, 100, 8], branco: [255, 255, 255],
+  suave: [160, 184, 172], ambar: [168, 100, 8], branco: [255, 255, 255], alerta: [160, 40, 28],
 };
 export const M = 16;
 
@@ -118,10 +118,12 @@ export function gerarPdfLote(jsPDF, d) {
   secao('Indicadores do lote', 70);
   const ind = [
     ['Dias de cultivo', fmtInt(c.diasCultivo), 'dias', `desde ${fmtData(lote.data_entrada)}`],
-    ['Peso médio atual', c.pmAtualG != null ? (c.pmAtualG >= 1000 ? n(c.pmAtualG / 1000, 2) : n(c.pmAtualG, 0)) : '-', c.pmAtualG != null ? (c.pmAtualG >= 1000 ? 'kg' : 'g') : '', c.dataUltimaBio ? `biometria de ${fmtData(c.dataUltimaBio)}` : 'sem biometria'],
+    c.pmEstimadoG != null
+      ? ['Peso médio hoje', c.pmEstimadoG >= 1000 ? n(c.pmEstimadoG / 1000, 2) : n(c.pmEstimadoG, 0), c.pmEstimadoG >= 1000 ? 'kg estim.' : 'g estim.', c.pmAtualG != null ? `pesado ${pesoTxt(c.pmAtualG)} em ${fmtData(c.dataUltimaBio)}` : 'pela ração, sem biometria']
+      : ['Peso médio atual', c.pmAtualG != null ? (c.pmAtualG >= 1000 ? n(c.pmAtualG / 1000, 2) : n(c.pmAtualG, 0)) : '-', c.pmAtualG != null ? (c.pmAtualG >= 1000 ? 'kg' : 'g') : '', c.dataUltimaBio ? `biometria de ${fmtData(c.dataUltimaBio)}` : 'sem biometria'],
     encerrado && c.despescados ? ['Peixes retirados', fmtInt(c.despescados), '', `de ${fmtInt(lote.quantidade_inicial)} na entrada`] : ['Peixes vivos', fmtInt(c.vivos), 'estim.', `de ${fmtInt(lote.quantidade_inicial)} na entrada`],
     ['Sobrevivência', c.sobrevivencia != null ? fmtPct(c.sobrevivencia) : '-', '%', `${plural(c.mortos, 'morto', 'mortos')}`],
-    encerrado && c.despescados ? ['Peso retirado', n(c.pesoDespescado, 0), 'kg', `na entrada: ${n(c.biomassaInicial, 0)} kg`] : ['Biomassa', c.biomassaAtual != null ? n(c.biomassaAtual, 0) : '-', c.biomassaAtual != null ? 'kg' : '', `na entrada: ${n(c.biomassaInicial, 0)} kg`],
+    encerrado && c.despescados ? ['Peso retirado', n(c.pesoDespescado, 0), 'kg', `na entrada: ${n(c.biomassaInicial, 0)} kg`] : c.biomassaEstimada != null ? ['Biomassa hoje', n(c.biomassaEstimada, 0), 'kg estim.', c.biomassaAtual != null ? `na biometria: ${n(c.biomassaAtual, 0)} kg` : `na entrada: ${n(c.biomassaInicial, 0)} kg`] : ['Biomassa', c.biomassaAtual != null ? n(c.biomassaAtual, 0) : '-', c.biomassaAtual != null ? 'kg' : '', `na entrada: ${n(c.biomassaInicial, 0)} kg`],
     ['Ração fornecida', n(c.racaoTotal, 0), 'kg', `${n(c.racaoTotal / kgSaco, 1)} sacos de ${n(kgSaco, 0)} kg`],
     ['Conversão alimentar', c.ca != null ? n(c.ca, 2) : '-', '', c.ca != null ? 'kg de ração por kg ganho' : c.caAguardaPesagem ? 'após a próxima pesagem' : 'precisa de biometria'],
     ['Ganho diário', c.gpd != null ? n(c.gpd, 1) : '-', c.gpd != null ? 'g/dia' : '', 'por peixe desde a entrada'],
@@ -152,6 +154,8 @@ export function gerarPdfLote(jsPDF, d) {
   obs.push(['Crescimento', c.pmAtualG != null
     ? `Peso médio de ${pesoTxt(c.pmInicialG)} na entrada para ${pesoTxt(c.pmAtualG)} em ${fmtData(c.dataUltimaBio)}${c.gpd != null ? ` (${n(c.gpd, 1)} g por dia por peixe)` : ''}.`
     : 'Sem biometria registrada. Pese uma amostra para calcular peso médio, biomassa e conversão alimentar.']);
+  if (c.racaoImpossivel) obs.push(['Atenção', `Desde ${fmtData(c.estimadoDesde)} foram lançados ${n(c.racaoDesdeBio, 0)} kg de ração, mais do que esses peixes conseguem comer. Algum lançamento deve estar errado: confira a lista de ração no app.`]);
+  if (c.pmEstimadoG != null) obs.push(['Peso hoje', `Desde ${fmtData(c.estimadoDesde)} os peixes receberam ${n(c.racaoDesdeBio, 0)} kg de ração. Pela tabela de alimentação do tambaqui, ajustada ao que este lote gasta, o peso médio hoje deve estar perto de ${pesoTxt(c.pmEstimadoG)} (biomassa de ${n(c.biomassaEstimada, 0)} kg). É uma estimativa: a próxima biometria corrige.`]);
   const qi = Number(lote.quantidade_inicial) || 0;
   obs.push(['Sobrevivência', encerrado && c.despescados
     ? `${plural(c.mortos, 'morte registrada', 'mortes registradas')}. Na despesca total saíram ${fmtInt(c.despescados)} de ${fmtInt(qi)} peixes (${fmtPct(c.sobrevivencia ?? 0)}% de sobrevivência).`
@@ -287,14 +291,18 @@ function rodape(doc, fazenda, titulo, txt, caps, linha, rotulo = 'Relatório do 
   }
 }
 
-export function tabela(doc, y, head, body, align, larguras = []) {
+// destaque(linha, coluna): true pinta a célula do corpo de vermelho e negrito (o pior da comparação)
+export function tabela(doc, y, head, body, align, larguras = [], destaque = null) {
   const colStyles = {}; align.forEach((a, i) => { colStyles[i] = { halign: a, ...(larguras[i] ? { cellWidth: larguras[i] } : {}) }; });
   doc.autoTable({
     startY: y, head, body, margin: { left: M, right: M, top: TOPO, bottom: 16 }, theme: 'plain',
     styles: { font: FAM, fontSize: 9, cellPadding: { top: 2.2, bottom: 2.2, left: 2.5, right: 2.5 }, textColor: COR.tinta, lineColor: COR.linha, lineWidth: { bottom: 0.15 } },
     headStyles: { font: FAM, fontStyle: 'bold', fontSize: 6.8, textColor: COR.mudo, fillColor: COR.fundo2, lineColor: COR.linha, lineWidth: { bottom: 0.12 }, cellPadding: { top: 2, bottom: 2, left: 2.5, right: 2.5 } },
     columnStyles: colStyles,
-    didParseCell: (h) => { if (h.section === 'head') h.cell.styles.halign = align[h.column.index]; },
+    didParseCell: (h) => {
+      if (h.section === 'head') h.cell.styles.halign = align[h.column.index];
+      else if (destaque && destaque(h.row.index, h.column.index)) { h.cell.styles.textColor = COR.alerta; h.cell.styles.fontStyle = 'bold'; }
+    },
   });
 }
 

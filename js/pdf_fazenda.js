@@ -1,5 +1,6 @@
 // Relatório geral da fazenda em PDF: estoque de ração, lotes ativos e ração dos últimos 30 dias.
-import { fmtNum, fmtInt, fmtData, fmtBRL, fmtPct, ROTULO_TIPO } from './util.js';
+import { fmtNum, fmtInt, fmtData, fmtBRL, fmtPct, ROTULO_TIPO, diasEntre } from './util.js';
+import { ALERTAS } from './config.js';
 import { COR, M, LARG, TOPO, BASE, ferramentas, rodape, logoPdf, tabela, barras } from './pdf_lote.js';
 
 const n = (v, d = 1) => fmtNum(v, d);
@@ -29,7 +30,7 @@ export function gerarPdfFazenda(jsPDF, d) {
   y = 53;
 
   const vivos = lotes.reduce((s, l) => s + (l.c.vivos || 0), 0);
-  const biomassa = lotes.reduce((s, l) => s + (l.c.biomassaAtual || 0), 0);
+  const biomassa = lotes.reduce((s, l) => s + (l.c.biomassaEstimada ?? l.c.biomassaAtual ?? 0), 0);
   const racao30 = racaoDia.reduce((s, r) => s + r.kg, 0);
   const mortos = lotes.reduce((s, l) => s + (l.c.mortos || 0), 0);
   const inicial = lotes.reduce((s, l) => s + (Number(l.lote.quantidade_inicial) || 0), 0);
@@ -86,14 +87,42 @@ export function gerarPdfFazenda(jsPDF, d) {
   if (lotes.length) {
     const corpo = lotes.map((l) => [
       l.nomeTanque, `${l.lote.especie} (${{ bercario: 'berç.', alevinagem: 'alev.', recria: 'recr.', engorda: 'eng.' }[l.lote.tipo] || l.lote.tipo})`, fmtInt(l.c.diasCultivo),
-      l.c.pmAtualG != null ? n(l.c.pmAtualG, 0) : '-', fmtInt(l.c.vivos), fmtInt(l.c.mortos), l.c.sobrevivencia != null ? `${fmtPct(l.c.sobrevivencia)}%` : '-',
-      l.c.biomassaAtual != null ? n(l.c.biomassaAtual, 0) : '-', l.c.ca != null ? n(l.c.ca, 2) : '-',
+      (l.c.pmEstimadoG ?? l.c.pmAtualG) != null ? n(l.c.pmEstimadoG ?? l.c.pmAtualG, 0) + (l.c.pmEstimadoG != null ? '*' : '') : '-', fmtInt(l.c.vivos), fmtInt(l.c.mortos), l.c.sobrevivencia != null ? `${fmtPct(l.c.sobrevivencia)}%` : '-',
+      (l.c.biomassaEstimada ?? l.c.biomassaAtual) != null ? n(l.c.biomassaEstimada ?? l.c.biomassaAtual, 0) + (l.c.biomassaEstimada != null ? '*' : '') : '-', l.c.ca != null ? n(l.c.ca, 2) : '-',
     ]);
     tabela(doc, y, [['TANQUE', 'ESPÉCIE', 'DIAS', 'PESO (g)', 'VIVOS', 'MORTOS', 'SOBREV.', 'BIOMASSA', 'CONV.']], corpo, ['left', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right'], [30, 34]);
     y = doc.lastAutoTable.finalY + 3;
     txt('Peso, vivos, biomassa (kg) e conversão são estimativas a partir da última biometria e da mortalidade lançada. Conversão: kg de ração por kg ganho.', M, y + 2, { size: 7.5, color: COR.mudo });
     y += 10;
+    if (lotes.some((l) => l.c.pmEstimadoG != null)) {
+      txt('* Peso de hoje estimado pela ração dada desde a última biometria (tabela de alimentação do tambaqui, ajustada a cada lote).', M, y - 3, { size: 7.5, color: COR.mudo });
+      y += 5;
+    }
   } else { txt('Nenhum lote ativo.', M, y + 1, { size: 9, color: COR.mudo }); y += 10; }
+
+  // ---------- comparação entre tanques (2 ou mais lotes) ----------
+  if (lotes.length >= 2) {
+    const cmp = compararTanques(lotes, geradoEm);
+    secao('Comparação entre tanques', 50);
+    txt('O pior de cada coluna fica em vermelho, comparando só tanques da mesma fase.', M, y, { size: 8, color: COR.mudo });
+    y += 3;
+    const corpo = cmp.linhas.map((x) => [
+      x.nome, x.fase, x.ca != null ? n(x.ca, 2) : '-', x.gpd != null ? n(x.gpd, 1) : '-', x.sobrev != null ? `${fmtPct(x.sobrev)}%` : '-',
+      x.diasBio != null ? fmtInt(x.diasBio) : 'nunca',
+    ]);
+    tabela(doc, y, [['TANQUE', 'FASE', 'CONVERSÃO', 'GANHO (g/dia)', 'SOBREV.', 'DIAS SEM PESAR']], corpo,
+      ['left', 'left', 'right', 'right', 'right', 'right'], [38], (i, col) => cmp.pior.has(`${i}:${col}`));
+    y = doc.lastAutoTable.finalY + 3;
+    const nota = quebra(`Conversão: kg de ração por kg ganho (menor é melhor). Ganho: por peixe, desde a entrada. Mais de ${ALERTAS.biometriaDias} dias sem pesar deixa os números desatualizados.`, LARG, 7.5);
+    nota.forEach((l, k) => txt(l, M, y + 2 + k * 3.4, { size: 7.5, color: COR.mudo }));
+    y += 5 + nota.length * 3.4;
+    if (cmp.avisos.length) {
+      cabe(8 + cmp.avisos.length * 5.5);
+      caps('O que olhar', M, y + 1, { color: COR.alerta }); y += 6;
+      for (const a of cmp.avisos) { const ls = quebra(a, LARG - 4, 9); cabe(ls.length * 4.6); txt('•', M, y, { size: 9, color: COR.alerta }); ls.forEach((l, k) => txt(l, M + 4, y + k * 4.6, { size: 9 })); y += ls.length * 4.6 + 1.2; }
+      y += 3;
+    }
+  }
 
   // ---------- 3. ração ----------
   secao('Ração nos últimos 30 dias', 90);
@@ -113,4 +142,47 @@ export function gerarPdfFazenda(jsPDF, d) {
 
   rodape(doc, fazenda, 'Situação da fazenda', txt, caps, linha, 'Relatório geral', d.logo);
   return doc;
+}
+
+// Tanques lado a lado: conversão, ganho diário, sobrevivência e dias sem biometria. O pior de cada coluna é marcado
+// só entre lotes da MESMA fase (alevinagem e engorda não se comparam); dias sem pesar vale para todos (acima do limite).
+// Retorna { linhas, pior: Set('linha:coluna'), avisos: [frases] }. Exportada para os testes.
+export function compararTanques(lotes, hoje) {
+  const linhas = lotes.map((l) => ({
+    nome: l.nomeTanque, tipo: l.lote.tipo, fase: ROTULO_TIPO[l.lote.tipo] || l.lote.tipo,
+    ca: l.c.ca, gpd: l.c.gpd, sobrev: l.c.sobrevivencia,
+    diasBio: l.c.dataUltimaBio ? Math.max(0, diasEntre(l.c.dataUltimaBio, hoje)) : null,
+    racaoImpossivel: !!l.c.racaoImpossivel, racaoDesde: l.c.estimadoDesde, racaoKg: l.c.racaoDesdeBio,
+  }));
+  const pior = new Set(), porTanque = new Map(); // índice da linha → frases
+  const add = (i, f) => { if (!porTanque.has(i)) porTanque.set(i, []); porTanque.get(i).push(f); };
+  const fmt = { ca: (v) => fmtNum(v, 2), gpd: (v) => `${fmtNum(v, 1)} g/dia`, sobrev: (v) => `${fmtPct(v)}%` };
+  const cols = [['ca', 2, 'max', 'a pior conversão'], ['gpd', 3, 'min', 'o menor ganho de peso'], ['sobrev', 4, 'min', 'a menor sobrevivência']];
+  const fases = [...new Set(linhas.map((x) => x.tipo))];
+  for (const tipo of fases) {
+    const idx = linhas.map((x, i) => i).filter((i) => linhas[i].tipo === tipo);
+    if (idx.length < 2) continue;
+    for (const [k, col, lado, frase] of cols) {
+      const com = idx.filter((i) => linhas[i][k] != null && Number.isFinite(Number(linhas[i][k])));
+      if (com.length < 2) continue;
+      const vals = com.map((i) => Number(linhas[i][k]));
+      const alvo = lado === 'max' ? Math.max(...vals) : Math.min(...vals);
+      const outros = vals.filter((v) => v !== alvo);
+      if (!outros.length) continue; // todos iguais: ninguém é o pior
+      const media = outros.reduce((s, v) => s + v, 0) / outros.length;
+      if (Math.abs(alvo - media) / (Math.abs(media) || 1) < 0.05) continue; // diferença menor que 5%: não destaca
+      for (const i of com) if (Number(linhas[i][k]) === alvo) {
+        pior.add(`${i}:${col}`);
+        add(i, `${frase} da ${linhas[i].fase.toLowerCase()} (${fmt[k](alvo)}; os outros, em média, ${fmt[k](media)})`);
+      }
+    }
+  }
+  linhas.forEach((x, i) => {
+    if (x.racaoImpossivel) add(i, `ração lançada desde ${fmtData(x.racaoDesde)} (${fmtNum(x.racaoKg, 0)} kg) é mais do que os peixes conseguem comer: confira os lançamentos`);
+    if (x.diasBio == null) { pior.add(`${i}:5`); add(i, 'ainda sem biometria (pese uma amostra para ter peso, biomassa e conversão)'); }
+    else if (x.diasBio > ALERTAS.biometriaDias) { pior.add(`${i}:5`); add(i, `${fmtInt(x.diasBio)} dias sem pesar (faça uma biometria para atualizar os números)`); }
+  });
+  const juntar = (fs) => (fs.length > 1 ? `${fs.slice(0, -1).join('; ')}; e ${fs[fs.length - 1]}` : fs[0]);
+  const avisos = [...porTanque.keys()].sort((a, b) => a - b).map((i) => { const f = juntar(porTanque.get(i)); return `${linhas[i].nome}: ${f.charAt(0).toLowerCase() + f.slice(1)}.`; });
+  return { linhas, pior, avisos };
 }
