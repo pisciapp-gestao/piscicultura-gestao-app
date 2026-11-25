@@ -5,6 +5,10 @@ import { esc, fmtNum } from './util.js';
 export const COR_FASE = { bercario: '#c2e0d7', alevinagem: '#6fae9f', recria: '#1b6c5a', engorda: '#0d2621' };
 export const ORDEM_FASE = ['bercario', 'alevinagem', 'recria', 'engorda'];
 export const COR_RACAO = { engorda: '#1b6c5a', alevino: '#6fae9f' };
+// Cor de cada ração cadastrada (sql/39: racoes.cor de 0 a 9). A mesma cor no lançamento, no estoque e no início,
+// para o tratador reconhecer pela cor (como a cor do saco). Todas com texto branco legível por cima (contraste ≥ 4,5).
+export const CORES_RACOES = ['#9a6510', '#2f6f9f', '#1b6c5a', '#6f4f9c', '#b0472f', '#1f7a83', '#7a5a2a', '#46616e', '#9c3f6e', '#4d7a2a'];
+export const corRacao = (i) => CORES_RACOES[((Number(i) || 0) % CORES_RACOES.length + CORES_RACOES.length) % CORES_RACOES.length];
 
 // fatias: [{ nome, valor, cor, txt? }]; txt é o valor já formatado para a legenda
 export function pizza(fatias, { centro = '', sub = '', rotulo = 'Gráfico de pizza' } = {}) {

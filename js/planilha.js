@@ -61,8 +61,8 @@ function validar(l, tanques, lotesAtivos) {
   if (!l.qtd) return 'falta a quantidade de peixes.';
   if (!l.pm) return l.pmTxt ? `peso "${l.pmTxt}" não entendido (ex.: 2,3 kg ou 500 g).` : 'falta o peso médio de cada peixe.';
   if (l.pm > 30) return `peso médio de ${l.pm} kg por peixe parece o peso total. Informe o peso de UM peixe.`;
-  if (!l.data) return 'falta a data de início do ciclo (dd/mm/aaaa).';
-  if (l.data > hojeISO()) return 'a data de início está no futuro.';
+  if (!l.data) return 'falta a data de povoamento (dd/mm/aaaa).';
+  if (l.data > hojeISO()) return 'a data de povoamento está no futuro.';
   if (existe && lotesAtivos.some((x) => x.tanque_id === existe.id)) return `"${existe.nome}" já tem lote ativo. Cadastre pela tela do tanque.`;
   return null;
 }
@@ -80,7 +80,7 @@ function blocosWhatsApp(texto) {
     const dt = dataBR(ln);
     if (ha) { b.areaTxt = ha[1]; }
     else if (px) { b.qtdTxt = px[1]; }
-    else if (/inicio do ciclo/.test(s)) { if (dt) b.dataTxt = ln; else esperaData = true; }
+    else if (/inicio do ciclo|data de povoamento|povoad[oa] em/.test(s)) { if (dt) b.dataTxt = ln; else esperaData = true; }
     else if (dt && (esperaData || !b.dataTxt)) { b.dataTxt = ln; esperaData = false; }
     else if (fase(ln)) { if (!b.faseTxt) b.faseTxt = ln; }
     else if (pesoMedio(ln)) { b.pmTxt = ln; }

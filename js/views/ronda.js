@@ -2,9 +2,9 @@
 // Abas "Falta fazer" e "Feitos"; com mais de 8 tanques aparece a busca. Tocar no tanque abre a janela
 // com as ações dele (ração, mortes, água, pesagem, probiótico e, para dono e gerente, despesca).
 // Dono e gerente abrem pela Hoje; para o funcionário, a ronda é a própria Hoje.
-import { esc, fmtInt, fmtNum, ROTULO_TIPO } from '../util.js';
+import { esc, fmtInt, fmtNum, ROTULO_TIPO, hojeISO } from '../util.js';
 import { icone } from '../icons.js';
-import { vivosDoLote } from '../calc.js';
+import { vivosDoLote, pesoHoje } from '../calc.js';
 import { dadosDoDia, situacaoTanque, formatosSaco, ordemNatural } from './dia.js';
 
 let filtro = 'falta', busca = '';
@@ -98,7 +98,7 @@ function abrirAcoes(ctx, D, F, t, origem) {
   if (!t) return;
   const ls = D.lotesDe(t.id);
   const peixes = ls.reduce((a, l) => a + vivosDoLote(l, D.resumo[l.id]), 0);
-  const kgCada = ls.length === 1 && D.resumo[ls[0].id] && D.resumo[ls[0].id].ultimo_peso_medio_kg != null ? Number(D.resumo[ls[0].id].ultimo_peso_medio_kg) : null;
+  const kgCada = ls.length === 1 ? pesoHoje(ls[0], D.resumo[ls[0].id], hojeISO(), { semEntrada: true }).kg : null;
   const sub = [ls.length > 1 ? `${ls.length} lotes` : ls.length ? ROTULO_TIPO[ls[0].tipo] || ls[0].tipo : '', !D.semDetalhe && peixes ? `${fmtInt(peixes)} peixes` : '', kgCada ? `${kgCada >= 1 ? `${fmtNum(kgCada, 2)} kg` : `${fmtNum(kgCada * 1000, 0)} g`} cada` : ''].filter(Boolean).join(' · ');
   const acoes = acoesDoTanque(ctx, D, t, F, 'ronda');
   const fundo = document.createElement('div');

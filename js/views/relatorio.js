@@ -9,7 +9,7 @@ import { confirmar, formulario } from '../dialogo.js';
 import { icone } from '../icons.js';
 import { esc, fmtData, fmtNum, fmtInt, fmtBRL, hojeISO, num, ROTULO_TIPO, faseCss, nomeArquivo, dataArquivo, progresso, fmtPct, numDecimal, numMoeda, moedaCampo, pesoMedioTxt, celulaCsv } from '../util.js';
 import { pizza, COR_FASE, ORDEM_FASE } from '../graficos.js';
-import { calcularNaIdade, fimDoLote, mediaDe, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui } from '../calc.js';
+import { calcularNaIdade, fimDoLote, mediaDe, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui, pesoHoje } from '../calc.js';
 import { calcularLote, precoMedioKg, precoRacaoDoLote, pontosPeso, pesoMedioKg, evolucaoPeso, racaoPorSemana, matrizRacao, situacaoEstoque, previsaoRacao } from '../calc.js';
 import { metaDe, metasDe, htmlPrevRacao, conversaoDe, PROXIMA_FASE } from './despesca.js';
 
@@ -42,7 +42,7 @@ export function montarCsv(lote, nomeTanque, calc, bios, mort, rac, quem, desp = 
   L.push(['Relatório do lote'], ['Tanque', nomeTanque], ['Fase', ROTULO_TIPO[lote.tipo] || lote.tipo], ['Espécie', lote.especie],
     ['Entrada', fmtData(lote.data_entrada)], ['Peixes iniciais', lote.quantidade_inicial], ['Peso total inicial (kg)', csvNum(lote.peso_inicial_kg)],
     [], ['RESUMO'], ['Dias de cultivo', calc.diasCultivo], ['Peixes vivos (estimado)', calc.vivos], ['Mortos', calc.mortos],
-    ['Ração total (kg)', csvNum(calc.racaoTotal)], ['Peso médio atual (g)', csvNum(calc.pmAtualG, 1)],
+    ['Ração total (kg)', csvNum(calc.racaoTotal)], ['Peso médio atual (g)', csvNum(calc.pmAtualG, 1)], ...(calc.pmEstimadoG != null ? [['Peso médio hoje estimado pela ração (g)', csvNum(calc.pmEstimadoG, 1)], ['Biomassa hoje estimada (kg)', csvNum(calc.biomassaEstimada, 0)]] : []),
     ['Conversão alimentar aparente', csvNum(calc.ca)], ...(calc.custoKgProduzido != null ? [['Custo de ração por kg produzido (R$)', csvNum(calc.custoKgProduzido)]] : []), ['Ganho de peso diário (g/dia)', csvNum(calc.gpd)], [],
     ['RAÇÃO'], ['Data', 'Quantidade (kg)', 'Registrado por']);
   rac.forEach((r) => L.push([fmtData(r.data), csvNum(r.quantidade_kg), quem(r.registrado_por)]));
@@ -118,12 +118,17 @@ export async function renderRelatorios(ctx, el) {
       ]);
       // estoque igual ao da Início: ração que ficou negativa não desconta da outra (77 → 78 sacos),
       // e a duração usa a ração de engorda; numa fazenda nova (sem 7 dias), o ritmo de hoje
+      // fazenda com rações cadastradas (sql/39): o total é a soma das rações e a duração é a da que acaba primeiro
+      const porRacao = !!(saldosTipo && saldosTipo.porRacao);
+      const somaR = (k, pos) => (saldosTipo.linhas || []).reduce((t, x) => t + (pos ? Math.max(0, Number(x[k]) || 0) : Number(x[k]) || 0), 0);
       const tiposR = saldosTipo && saldosTipo.porTipo ? saldosTipo.linhas : null;
       const saldo = saldoTotal ? { ...saldoTotal, ...(tiposR ? { saldo_kg: tiposR.reduce((t, x) => t + Math.max(0, Number(x.saldo_kg) || 0), 0) } : {}) } : saldoTotal;
       const engorda = tiposR ? (tiposR.find((x) => x.tipo_racao === 'engorda') || tiposR[0]) : saldoTotal;
       const tipoDoTanque = (tid) => { const l = lotes.find((x) => x.ativo && x.tanque_id === tid); return l && ['alevinagem', 'bercario'].includes(l.tipo) ? 'alevino' : 'engorda'; };
       const hojeKgEng = (linhas || []).filter((r) => r.data === hoje && (!tiposR || tipoDoTanque(r.tanque_id) === 'engorda')).reduce((t, r) => t + Number(r.quantidade_kg || 0), 0);
-      const ritmoHoje = !(Number(engorda && engorda.consumo_7d_kg) > 0) && hojeKgEng > 0;
+      const ritmoHoje = !porRacao && !(Number(engorda && engorda.consumo_7d_kg) > 0) && hojeKgEng > 0;
+      const saldoPdf = porRacao ? { saldo_kg: somaR('saldo_kg', true), total_comprado_kg: somaR('total_comprado_kg'), total_consumido_kg: somaR('total_consumido_kg') } : saldo;
+      const refSit = porRacao ? saldosTipo.linhas[0] : engorda;
       const precoKg = ctx.verDinheiro() ? precoMedioKg(compras) : null;
       const nomeDe = (tid) => (tanques.find((t) => t.id === tid) || {}).nome || '';
       const ativos = lotes.filter((l) => l.ativo);
@@ -139,8 +144,9 @@ export async function renderRelatorios(ctx, el) {
       const racaoTanque = tanques.filter((t) => porTanque.has(t.id)).map((t) => ({ nome: t.nome, kg: porTanque.get(t.id) }))
         .sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR', { numeric: true, sensitivity: 'base' }));
       const doc = gerarPdfFazenda(jsPDF, {
-        logo: ctx.state.ref.logo || null, fazenda: (ctx.state.perfil.fazendas && ctx.state.perfil.fazendas.nome) || 'Piscicultura', geradoEm: hoje, kgSaco: kgS, gerir, dinheiro: ctx.verDinheiro(), fontes, saldo: saldo || {},
-        sit: situacaoEstoque(engorda && engorda.saldo_kg, ritmoHoje ? hojeKgEng * 7 : engorda && engorda.consumo_7d_kg, ESTOQUE_ATENCAO_DIAS, ESTOQUE_CRITICO_DIAS), ritmoHoje, soEngorda: !!tiposR,
+        logo: ctx.state.ref.logo || null, fazenda: (ctx.state.perfil.fazendas && ctx.state.perfil.fazendas.nome) || 'Piscicultura', geradoEm: hoje, kgSaco: kgS, gerir, dinheiro: ctx.verDinheiro(), fontes, saldo: saldoPdf || {},
+        sit: situacaoEstoque(refSit && refSit.saldo_kg, ritmoHoje ? hojeKgEng * 7 : refSit && refSit.consumo_7d_kg, ESTOQUE_ATENCAO_DIAS, ESTOQUE_CRITICO_DIAS), ritmoHoje, soEngorda: !!tiposR,
+        racaoQueAcaba: porRacao && refSit ? refSit.nome : null,
         lotes: detalhes, racaoDia, racaoTanque, precoKg, ultimaContagem: contagens[0] || null,
       });
       bf.disabled = false; bf.innerHTML = texto;
@@ -261,7 +267,8 @@ export async function renderRelatorioLote(ctx, el, id) {
   // ração que falta até vender (ou passar de fase), pela tabela de alimentação, e a ração certa agora (só lote ativo)
   const blocoRacaoAteVender = () => {
     if (!lote.ativo) return '';
-    const r = { ultimo_peso_medio_kg: c.pmAtualG != null ? c.pmAtualG / 1000 : null, racao_kg: c.racaoTotal, mortos: c.mortos, despescados: c.despescados, transferidos: c.transferidos };
+    // peso de hoje estimado pela ração, quando houver (a ração total já inclui a dada depois da última pesagem)
+    const r = { ultimo_peso_medio_kg: (c.pmEstimadoG ?? c.pmAtualG) != null ? (c.pmEstimadoG ?? c.pmAtualG) / 1000 : null, racao_kg: c.racaoTotal, mortos: c.mortos, despescados: c.despescados, transferidos: c.transferidos };
     const alvo = metaDe(lote, metasDe(ctx.state.ref, {}));
     const cv = conversaoDe((ctx.state.ref.tanques || []).find((t) => t.id === lote.tanque_id), ctx.state.ref); // sql/41
     const pr = previsaoRacao(lote, r, alvo, cv && cv.ca);
@@ -292,8 +299,11 @@ export async function renderRelatorioLote(ctx, el, id) {
   };
 
   const painelResumo = () => `
+    ${c.racaoImpossivel ? `<div class="aviso" role="alert"><p style="margin:0"><b>⚠️ Confira a ração lançada.</b> Desde ${fmtData(c.estimadoDesde)} foram lançados ${fmtNum(c.racaoDesdeBio, 0)} kg (${fmtNum(c.racaoDesdeBio / kgS, 0)} sacos), mais do que esses peixes conseguem comer. Algum lançamento deve estar errado: confira em <a href="#/relatorio/${esc(lote.id)}?aba=registros">${gerir ? 'Registros' : 'Lançamentos'}</a>.</p></div>` : ''}
     <div class="card destaques3">
-      ${destaque('Peso médio atual', c.pmAtualG != null ? pesoUnid(c.pmAtualG) : '—', c.pmAtualG != null ? `em ${fmtData(c.dataUltimaBio)}` : 'sem biometria ainda')}
+      ${c.pmEstimadoG != null
+        ? destaque('Peso médio hoje', '≈ ' + pesoUnid(c.pmEstimadoG), `estimado pela ração · ${c.pmAtualG != null ? `pesado ${pesoUnid(c.pmAtualG).replace(/<\/?em>/g, ' ').trim()} em ${fmtData(c.dataUltimaBio)}` : 'sem biometria ainda'}`)
+        : destaque('Peso médio atual', c.pmAtualG != null ? pesoUnid(c.pmAtualG) : '—', c.pmAtualG != null ? `em ${fmtData(c.dataUltimaBio)}` : 'sem biometria ainda')}
       ${destaque('Ração fornecida', unid(fmtNum(c.racaoTotal, 0), 'kg'), `≈ ${fmtNum(c.racaoTotal / kgS, 1)} sacos` + (c.racaoMediaDia != null ? ` · média ${fmtNum(c.racaoMediaDia, 1)} kg/dia` : ''))}
       ${destaque('Conversão alimentar', c.ca != null ? fmtNum(c.ca, 2) : '—', c.ca != null ? 'kg de ração por kg ganho' : c.caAguardaPesagem ? 'lote cadastrado em andamento: aparece depois da próxima pesagem' : c.dataUltimaBio ? 'aparece quando houver ração lançada até a última biometria' : 'precisa de biometria com ganho')}
     </div>
@@ -304,11 +314,13 @@ export async function renderRelatorioLote(ctx, el, id) {
         ${c.transferidos ? linhaNum('Peixes transferidos', fmtInt(c.transferidos), c.tudoTransferido ? 'o tanque foi esvaziado: tudo transferido' : 'foram para outros tanques (não é venda)') : ''}
         ${c.despescados ? linhaNum('Peixes retirados', fmtInt(c.despescados), gerir ? `${fmtNum(c.pesoDespescado, 0)} kg de peso bruto` : '') : ''}
         ${ctx.verDinheiro() && c.despescados ? linhaNum('Receita das despescas', c.receita != null ? fmtBRL(c.receita) : '—', c.receita == null ? 'informe o preço de venda na despesca' : c.despescasSemPreco ? `falta o preço em ${fmtInt(c.despescasSemPreco)} ${c.despescasSemPreco === 1 ? 'despesca' : 'despescas'}` : c.receitaSobreBruto ? 'sobre o peso líquido; sem líquido informado, o bruto' : 'sobre o peso líquido') : ''}
-        ${linhaNum('Biomassa estimada', c.biomassaAtual != null ? fmtNum(c.biomassaAtual, 0) + ' kg' : '—', `na entrada: ${fmtNum(c.biomassaInicial, 0)} kg`)}
+        ${c.biomassaEstimada != null
+          ? linhaNum('Biomassa hoje (estimada)', '≈ ' + fmtNum(c.biomassaEstimada, 0) + ' kg', `${c.biomassaAtual != null ? `na última biometria: ${fmtNum(c.biomassaAtual, 0)} kg · ` : ''}${fmtNum(c.racaoDesdeBio, 0)} kg de ração desde ${fmtData(c.estimadoDesde)}`)
+          : linhaNum('Biomassa estimada', c.biomassaAtual != null ? fmtNum(c.biomassaAtual, 0) + ' kg' : '—', `na entrada: ${fmtNum(c.biomassaInicial, 0)} kg`)}
         ${ctx.verDinheiro() ? linhaNum('Custo de ração', c.custoRacao != null ? fmtBRL(c.custoRacao) : '—', c.custoRacao != null ? 'pelo preço médio pago por kg' : 'registre o valor nas compras') : ''}
         ${ctx.verDinheiro() ? linhaNum('Custo de ração por kg produzido', c.custoKgProduzido != null ? fmtBRL(c.custoKgProduzido) : '—', c.custoKgProduzido != null ? 'ração até a última biometria ÷ peixe que ganhou peso' : 'precisa de preço nas compras e biometria com ganho') : ''}
       </ul></div>
-      <p class="mudo nota">Valores estimados usam o peso médio da última biometria e a mortalidade registrada. Quanto mais biometrias, mais confiável.</p>
+      <p class="mudo nota">${c.pmEstimadoG != null ? 'O peso de hoje é estimado pela ração dada desde a última pesagem, pela tabela de alimentação do tambaqui ajustada ao que este lote gasta de verdade. A próxima biometria corrige. ' : ''}Valores estimados usam o peso médio da última biometria e a mortalidade registrada. Quanto mais biometrias, mais confiável.</p>
     </section>
     ${blocoTransf()}
     ${blocoRacaoAteVender()}
@@ -644,7 +656,8 @@ export async function renderRacaoDia(ctx, el) {
       const r0 = resumo[l.id];
       const v = vivosDoLote(l, r0);
       vivos += v;
-      if (r0 && r0.ultimo_peso_medio_kg != null) bio += v * Number(r0.ultimo_peso_medio_kg); else temPeso = false;
+      const ph = pesoHoje(l, r0, hojeISO(), { semEntrada: true }); // peso de hoje (biometria + ração depois dela)
+      if (ph.kg != null) bio += v * ph.kg; else temPeso = false;
     }
     return { lote, vivos, biomassaKg: temPeso && bio > 0 ? bio : null, fase: ls.every((l) => l.tipo === ls[0].tipo) ? ls[0].tipo : null };
   };

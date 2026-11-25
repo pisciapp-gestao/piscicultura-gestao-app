@@ -16,11 +16,13 @@ import { renderHome, renderTanqueDetalhe } from './views/home.js';
 import { renderLancar } from './views/lancar.js';
 import { renderTanques, renderTanque } from './views/tanques.js';
 import { renderEstoque } from './views/estoque.js';
+import { renderRacoes } from './views/racoes.js';
 import { renderRelatorios, renderRelatorioLote, renderRacaoDia } from './views/relatorio.js';
 import { renderEquipe } from './views/equipe.js';
 import { renderPlano } from './views/plano.js';
 import { renderHistorico } from './views/historico.js';
 import { renderAdmin } from './views/admin.js';
+import { renderClientes } from './views/clientes.js';
 import { renderPendencias } from './views/pendencias.js';
 import { renderMais } from './views/mais.js';
 import { renderRonda } from './views/ronda.js';
@@ -460,18 +462,22 @@ function montarShell() {
   // menu: Hoje, Tanques, Relatórios e Fazenda (o lançar fica dentro de cada tanque e da ronda)
   const links = [['', '#/', 'inicio', 'Hoje'], ['tanques', '#/tanques', 'tanques', 'Tanques'], ['relatorio', '#/relatorio', 'relatorio', 'Relatórios'], ['mais', '#/mais', 'fazenda', 'Fazenda']];
   const sup = p.suporte;
-  const faixa = sup ? `<div class="faixa-suporte" role="status"><span><b>Suporte</b> · ${esc(p.nome)} (administrador) · até ${horaCurta(sup.expira)}</span><button class="btn mini" type="button" data-sair-suporte>Sair do suporte</button></div>` : '';
+  const faixa = sup ? `<div class="faixa-suporte" role="status"><span><b>Suporte</b> · ${esc(p.nome)} (administrador) · até ${horaCurta(sup.expira)}</span><span class="faixa-acoes"><a class="btn mini" href="#/clientes">Trocar de fazenda</a><button class="btn mini" type="button" data-sair-suporte>Sair do suporte</button></span></div>` : '';
+  // administrador do sistema: atalho fixo para as fazendas dos clientes (no topo do celular e no alto da lateral)
+  const botaoClientes = state.admin ? `<a class="btn-clientes" data-rota-clientes href="#/clientes">${icone('admin', 18)}<span>Fazendas dos clientes</span></a>` : '';
   root.innerHTML = `
   <div class="app${sup ? ' em-suporte' : ''}">
     <header class="topo">
       <div class="marca"><span class="logo-sm"></span>
         <div><strong>${fazenda}</strong><small>${sup ? `Suporte · ${esc(p.nome)}` : `${esc(p.nome)} · ${papel}`}</small></div></div>
+      ${state.admin ? `<a class="btn-clientes-ic" href="#/clientes" aria-label="Fazendas dos clientes" title="Fazendas dos clientes">${icone('admin', 20)}</a>` : ''}
       <a id="pill" class="pill" href="#/pendencias"></a>
     </header>
     ${faixa ? `<div class="faixa-cel">${faixa}</div>` : ''}
     <aside class="lateral" aria-label="Navegação">
       <div class="marca"><span class="logo-sm"></span><div><strong>${fazenda}</strong><small>Piscicultura</small></div></div>
       ${faixa}
+      ${botaoClientes}
       <nav>${links.map(([aba, href, ic, txt]) => `<a data-aba="${aba}" href="${href}">${icone(ic, 19)}<span>${txt}</span></a>`).join('')}</nav>
       ${htmlAtalhos()}
       <div class="lateral-pe">
@@ -545,10 +551,12 @@ async function rotear() {
       case 'tanques': await renderTanques(ctx, el); break;
       case 'tanque': await renderTanque(ctx, el, partes[0], params); break;
       case 'estoque': await renderEstoque(ctx, el); break;
+      case 'racoes': await renderRacoes(ctx, el); break;
       case 'equipe': await renderEquipe(ctx, el); break;
       case 'plano': await renderPlano(ctx, el); break;
       case 'historico': await renderHistorico(ctx, el); break;
-      case 'admin': await renderAdmin(ctx, el); break;
+      case 'admin': await renderAdmin(ctx, el, 'fazendas', { filtro: 'todas', busca: '', aberta: params.f || null }); break;
+      case 'clientes': await renderClientes(ctx, el); break;
       case 'pendencias': await renderPendencias(ctx, el); break;
       case 'ronda': await renderRonda(ctx, el); break;
       case 'meus': await renderMeus(ctx, el); break;

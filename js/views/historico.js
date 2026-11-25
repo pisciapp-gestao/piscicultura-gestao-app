@@ -36,7 +36,7 @@ function descrever(h, nomeTanque, nomePessoa) {
 
 // o que mudou numa alteração: "campo: antes → depois"
 const ROTULO_CAMPO = {
-  data: 'Data', data_compra: 'Data', data_entrada: 'Entrada', quantidade_kg: 'Quantidade (kg)', quantidade: 'Quantidade', causa: 'Causa',
+  data: 'Data', data_compra: 'Data', data_entrada: 'Povoamento', quantidade_kg: 'Quantidade (kg)', quantidade: 'Quantidade', causa: 'Causa',
   oxigenio_mgl: 'Oxigênio (mg/L)', temperatura_c: 'Temperatura (°C)', ph: 'pH', amonia_mgl: 'Amônia (mg/L)',
   valor: 'Valor', categoria: 'Tipo', descricao: 'Descrição', custo_alevino: 'Custo do alevino',
   preco_kg: 'Preço (R$/kg)', comprador: 'Comprador',
