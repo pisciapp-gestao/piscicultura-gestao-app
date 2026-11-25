@@ -18,6 +18,20 @@ const ROT_CAT = Object.fromEntries(CATEGORIAS_SISTEMA);
 
 const horaDe = (iso) => { const d = new Date(iso); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
+export const situacaoFazenda = (f) => situacao(f);
+// Entrar como suporte (sql/34) pedindo o motivo, que o dono vê. Usado no painel e na tela Fazendas dos clientes.
+export async function pedirEntrarSuporte(ctx, f) {
+  const v = await formulario({
+    titulo: `Entrar na ${f.nome} como suporte?`,
+    texto: 'Você vê e pode alterar tudo como o dono: tanques, lotes, lançamentos, estoque, equipe e vendas. Tudo o que fizer fica no histórico da fazenda com o seu nome e "(suporte)", e o dono vê quem entrou. Vale por 2 horas. Use quando o cliente pedir ajuda.',
+    campos: [{ nome: 'motivo', rotulo: 'Motivo (o dono vê)', tipo: 'text', valor: '', maxlength: '120', placeholder: 'Ex.: cliente pediu ajuda com o estoque' }],
+    validar: (x) => (String(x.motivo || '').trim().length >= 3 ? null : 'Escreva o motivo (o dono vê).'),
+    ok: 'Entrar como suporte',
+  });
+  if (!v) return false;
+  return ctx.entrarSuporte(f.id, v.motivo.trim());
+}
+
 function situacao(f) {
   if (f.bloqueada) return { rotulo: 'Bloqueada', classe: 'erro', grupo: 'bloqueada' };
   const p = f.plano || {}; const [rotulo, classe] = ESTADO[p.estado] || ['—', ''];
@@ -257,16 +271,8 @@ export async function renderAdmin(ctx, el, aba = 'fazendas', estado = { filtro: 
     // suporte (sql/34): entra na fazenda do cliente e vê/altera tudo como o dono, por até 2 horas
     el.querySelectorAll('[data-suporte]').forEach((b) => b.addEventListener('click', async () => {
       const f = fazPor(b.dataset.suporte);
-      const v = await formulario({
-        titulo: `Entrar na ${f.nome} como suporte?`,
-        texto: 'Você vê e pode alterar tudo como o dono: tanques, lotes, lançamentos, estoque, equipe e vendas. Tudo o que fizer fica no histórico da fazenda com o seu nome e "(suporte)", e o dono vê quem entrou. Vale por 2 horas. Use quando o cliente pedir ajuda.',
-        campos: [{ nome: 'motivo', rotulo: 'Motivo (o dono vê)', tipo: 'text', valor: '', maxlength: '120', placeholder: 'Ex.: cliente pediu ajuda com o estoque' }],
-        validar: (x) => (String(x.motivo || '').trim().length >= 3 ? null : 'Escreva o motivo (o dono vê).'),
-        ok: 'Entrar como suporte',
-      });
-      if (!v) return;
       b.disabled = true;
-      try { if (!(await ctx.entrarSuporte(f.id, v.motivo.trim()))) b.disabled = false; } catch (e) { ctx.toast(e.message, 'erro'); b.disabled = false; }
+      try { if (!(await pedirEntrarSuporte(ctx, f))) b.disabled = false; } catch (e) { ctx.toast(e.message, 'erro'); b.disabled = false; }
     }));
     el.querySelectorAll('[data-acessos]').forEach((b) => b.addEventListener('click', async () => {
       const f = fazPor(b.dataset.acessos);

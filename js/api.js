@@ -512,6 +512,12 @@ export function criarApi(client) {
     },
     async adminFazendas() { return ok(await client.rpc('admin_fazendas')) || []; },
     async adminCobrancas() { return ok(await client.rpc('admin_cobrancas')) || []; },
+    // números de cada fazenda para acompanhar (sql/42); null se o sql/42 ainda não foi rodado
+    async adminAcompanhamento() {
+      const { data, error } = await client.rpc('admin_acompanhamento');
+      if (error) { if (error.code === 'PGRST202' || /admin_acompanhamento/i.test(error.message || '')) return null; ok({ error }); }
+      return data || [];
+    },
     async adminPacotes() { return ok(await client.rpc('admin_pacotes')) || []; },
     async adminConfig() { const d = ok(await client.rpc('admin_config')); return (Array.isArray(d) ? d[0] : d) || {}; },
     async adminConfirmarPagamento(cobranca, meses) { ok(await client.rpc('admin_confirmar_pagamento', { p_cobranca: cobranca, p_meses: meses })); },
