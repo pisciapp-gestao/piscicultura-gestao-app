@@ -10,7 +10,6 @@ await db.exec(`create role anon; create role authenticated; create schema auth; 
 await db.exec(`grant usage on schema public to anon, authenticated; alter default privileges in schema public grant select, insert, update, delete on tables to anon, authenticated;`);
 for (const f of readdirSync(DIR).filter((f) => /^\d\d_.*\.sql$/.test(f) && !f.startsWith('05_')).sort()) await db.exec(readFileSync(DIR + f, 'utf8'));
 await db.exec(readFileSync(DIR + '35_pedir_correcao.sql', 'utf8')); // de novo: pode repetir
-await db.exec(`grant select, insert, update, delete on all tables in schema public to anon, authenticated; revoke insert, update, delete on pedidos_correcao from anon, authenticated;`);
 
 const D = '00000000-0000-4000-8000-0000000000a1', W = '00000000-0000-4000-8000-0000000000a3', W2 = '00000000-0000-4000-8000-0000000000a4', G = '00000000-0000-4000-8000-0000000000a5', G2 = '00000000-0000-4000-8000-0000000000a6';
 const D2 = '00000000-0000-4000-8000-0000000000a9';
@@ -118,5 +117,7 @@ checa((await db.query(`select has_function_privilege('anon', 'pedir_correcao(tex
 checa((await db.query(`select has_function_privilege('authenticated', 'lancamento_para_correcao(text, uuid)', 'execute') x`)).rows[0].x === false, 'a função que lê qualquer lançamento NÃO pode ser chamada direto');
 r = await como(W2, `select * from lancamento_para_correcao('racao_consumo', '${r12}')`); checa(!!r.erro, 'funcionário NÃO lê lançamento pela função interna');
 
+await db.exec(`set role anon;`); let vis; try { await db.query(`select count(*) from pedidos_correcao`); vis = 'leu'; } catch { vis = 'barrado'; } await db.exec(`reset role;`);
+checa(vis === 'barrado', 'visitante sem login nem chega à tabela de pedidos');
 console.log(ok ? 'RESULTADO: TUDO OK' : 'RESULTADO: FALHOU');
 process.exit(ok ? 0 : 1);
