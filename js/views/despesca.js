@@ -17,17 +17,23 @@ export function metasDe(ref, local = {}) {
   }
   return out;
 }
+// Conversão alimentar (sql/41): a do tanque, senão a da fazenda, senão nenhuma (previsão pela tabela)
+export function conversaoDe(tanque, ref) {
+  if (tanque && Number(tanque.conversao_alimentar) > 0) return { ca: Number(tanque.conversao_alimentar), origem: 'tanque' };
+  if (ref && Number(ref.conversao) > 0) return { ca: Number(ref.conversao), origem: 'fazenda' };
+  return null;
+}
 // de onde vem o peso de venda do tanque (para o texto da tela)
 export const origemPesoVenda = (tanque, ref) => (tanque && Number(tanque.peso_venda_kg) > 0 ? 'tanque' : ref && Number(ref.pesoVenda) > 0 ? 'fazenda' : 'padrao');
 
 // "Faltam ≈ 1.180 sacos de ração até vender" + a ração certa agora (tabela de alimentação)
-export function htmlPrevRacao(pr, kgSaco, tipo = 'engorda') {
+export function htmlPrevRacao(pr, kgSaco, tipo = 'engorda', origemCa = 'fazenda') {
   if (!pr) return '';
   const sacos = (kg) => fmtInt(Math.round(kg / kgSaco));
   const ate = PROXIMA_FASE[tipo] ? 'até passar de fase' : 'até vender';
   const dif = pr.fator ? Math.round(Math.abs(pr.fator - 1) * 100) : 0;
   const falta = pr.pronto ? '' : `<div class="ra-tile ra-falta"><span>Faltam ${ate}</span><b>${sacos(pr.faltaKg)}<em>sacos</em></b>
-    <small>${dif >= 1 ? `Tabela: ${sacos(pr.tabelaKg)}. Este lote gasta ${fmtInt(dif)}% ${pr.fator > 1 ? 'a mais' : 'a menos'}` : 'Pela tabela de alimentação'}</small></div>`;
+    <small>${pr.conversao ? `Conversão ${fmtNum(pr.conversao, Math.round(pr.conversao * 100) % 10 ? 2 : 1)} ${origemCa === 'tanque' ? 'deste tanque' : 'da fazenda'} · pela tabela seriam ${sacos(pr.tabelaKg)}` : dif >= 1 ? `Tabela: ${sacos(pr.tabelaKg)}. Este lote gasta ${fmtInt(dif)}% ${pr.fator > 1 ? 'a mais' : 'a menos'}` : 'Pela tabela de alimentação'}</small></div>`;
   const [nome, grao] = pr.agora ? String(pr.agora.racao).split(' · ') : [];
   const agora = pr.agora ? `<div class="ra-tile ra-agora"><span>Ração agora</span><b>${esc(nome)}</b>
     <small>${grao ? `${esc(grao)} · ` : ''}${fmtInt(pr.agora.tratos)} ${pr.agora.tratos === 1 ? 'trato' : 'tratos'}/dia · ${fmtNum(pr.agora.pct, 1)}% do peso</small></div>` : '';

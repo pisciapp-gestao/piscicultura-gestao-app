@@ -11,7 +11,7 @@ import { esc, fmtData, fmtNum, fmtInt, fmtBRL, hojeISO, num, ROTULO_TIPO, faseCs
 import { pizza, COR_FASE, ORDEM_FASE } from '../graficos.js';
 import { calcularNaIdade, fimDoLote, mediaDe, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui, pesoHoje } from '../calc.js';
 import { calcularLote, precoMedioKg, precoRacaoDoLote, pontosPeso, pesoMedioKg, evolucaoPeso, racaoPorSemana, matrizRacao, situacaoEstoque, previsaoRacao } from '../calc.js';
-import { metaDe, metasDe, htmlPrevRacao, PROXIMA_FASE } from './despesca.js';
+import { metaDe, metasDe, htmlPrevRacao, conversaoDe, PROXIMA_FASE } from './despesca.js';
 
 export function svgPeso(pts, { un = 'g', dec = 0, vazio = 'O gráfico aparece a partir da primeira biometria.', rotulo = 'Evolução do peso médio' } = {}) {
   if (pts.length < 2) return `<p class="mudo">${vazio}</p>`;
@@ -270,11 +270,12 @@ export async function renderRelatorioLote(ctx, el, id) {
     // peso de hoje estimado pela ração, quando houver (a ração total já inclui a dada depois da última pesagem)
     const r = { ultimo_peso_medio_kg: (c.pmEstimadoG ?? c.pmAtualG) != null ? (c.pmEstimadoG ?? c.pmAtualG) / 1000 : null, racao_kg: c.racaoTotal, mortos: c.mortos, despescados: c.despescados, transferidos: c.transferidos };
     const alvo = metaDe(lote, metasDe(ctx.state.ref, {}));
-    const pr = previsaoRacao(lote, r, alvo);
+    const cv = conversaoDe((ctx.state.ref.tanques || []).find((t) => t.id === lote.tanque_id), ctx.state.ref); // sql/41
+    const pr = previsaoRacao(lote, r, alvo, cv && cv.ca);
     if (!pr) return '';
     return `<section class="bloco"><h2>Ração até ${PROXIMA_FASE[lote.tipo] ? 'passar de fase' : 'vender'}</h2>
       <div class="card td-prev"><p class="mudo" style="margin:0">${PROXIMA_FASE[lote.tipo] ? 'Meta da fase' : 'Peso de venda'}: <b>${pr.alvoKg < 1 ? `${fmtNum(pr.alvoKg * 1000, 0)} g` : `${fmtNum(pr.alvoKg, 1)} kg`}</b> · agora ${pr.pmKg < 1 ? `${fmtNum(pr.pmKg * 1000, 0)} g` : `${fmtNum(pr.pmKg, 2)} kg`}</p>
-      ${pr.pronto ? `<p class="mudo" style="margin:.6rem 0 0"><b>Já está no peso.</b></p>` : ''}${htmlPrevRacao(pr, kgS, lote.tipo)}</div></section>`;
+      ${pr.pronto ? `<p class="mudo" style="margin:.6rem 0 0"><b>Já está no peso.</b></p>` : ''}${htmlPrevRacao(pr, kgS, lote.tipo, cv && cv.origem)}</div></section>`;
   };
 
   // transferências: de onde vieram e para onde foram os peixes, com o custo de ração que foi junto

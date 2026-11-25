@@ -1477,6 +1477,8 @@ details.fechando[open] > summary::after { transform: rotate(45deg) translateY(-2
 .ra-agora > b { font-size: 1.25rem; padding-top: .15rem; }
 .ra-tile > small { font-size: .78rem; color: var(--tinta-2); line-height: 1.35; }
 
+/* conversão alimentar (sql/41): dois links no cabeçalho da previsão */
+.td-prev-links { display: inline-flex; gap: .9rem; }
 /* ---------- Rações da fazenda (sql/39): cadastro, estoque por ração e a escolha no trato ---------- */
 .rc-cor { display: inline-block; width: 12px; height: 12px; border-radius: 3px; flex: none; background: var(--cor, var(--rio)); }
 .rc-lista .rc-lin { display: flex; align-items: center; gap: .75rem; padding: .7rem 0; border-top: 1px solid var(--linha-2); }

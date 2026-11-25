@@ -4,11 +4,12 @@ import * as db from '../db.js';
 import { previsaoDespesca, vivosDoLote, previsaoRacao, pesoHoje } from '../calc.js';
 import { icone } from '../icons.js';
 import { pedirTexto } from '../dialogo.js';
-import { metaDe, metasDe, htmlPrevisao, htmlPrevRacao, origemPesoVenda, PROXIMA_FASE } from './despesca.js';
+import { metaDe, metasDe, htmlPrevisao, htmlPrevRacao, origemPesoVenda, conversaoDe, PROXIMA_FASE } from './despesca.js';
 import { dadosDoDia, formatosSaco } from './dia.js';
 import { acoesDoTanque } from './ronda.js';
 
-export function htmlCardTanque(tanque, lotes, resumo, racaoHojeLocal, hoje, metas = {}, podeGerir = false, acoesHtml = '', kgSaco = 25) {
+export function htmlCardTanque(tanque, lotes, resumo, racaoHojeLocal, hoje, metas = {}, podeGerir = false, acoesHtml = '', kgSaco = 25, ref = null) {
+  const cv = conversaoDe(tanque, ref); // conversão alimentar do tanque ou da fazenda (sql/41)
   const nomeLote = (l) => `${ROTULO_TIPO[l.tipo] || l.tipo} · ${l.especie}`;
   const blocos = lotes.length
     ? lotes.map((l) => {
@@ -31,7 +32,7 @@ export function htmlCardTanque(tanque, lotes, resumo, racaoHojeLocal, hoje, meta
             <div><span>Peixes vivos (estim.)</span><b>${fmtInt(vivos ?? l.quantidade_inicial)}</b></div>
           </div>
           ${vivos != null && l.quantidade_inicial > 0 ? ((sv) => `<div class="td-sobre">${progresso((sv / l.quantidade_inicial) * 100, { tom: 'ok', rotulo: `Sobrevivência ${fmtPct((sv / l.quantidade_inicial) * 100)}%` })}<p class="h-trilho-leg"><span>Sobrevivência: ${fmtInt(sv)} de ${fmtInt(l.quantidade_inicial)} peixes${Number(r.despescados) ? ` (${fmtInt(r.despescados)} já despescados)` : ''}${Number(r.transferidos) ? ` (${fmtInt(r.transferidos)} transferidos)` : ''}</span><b>${fmtPct((sv / l.quantidade_inicial) * 100)}%</b></p></div>`)(Math.max(0, l.quantidade_inicial - (Number(r.mortos) || 0))) : ''}
-          ${r ? `<div class="td-prev"><div class="td-prev-cab"><span>${PROXIMA_FASE[l.tipo] ? 'Mudança de fase' : 'Despesca'}</span>${podeGerir ? `<button class="link" type="button" data-meta="${esc(l.id)}">${l.tipo === 'engorda' ? 'Peso de venda' : 'Mudar meta'}</button>` : ''}</div>${htmlPrevisao(previsaoDespesca(l, r, metaDe(l, metas), hoje), l.tipo)}${htmlPrevRacao(previsaoRacao(l, ph.estimado ? { ...r, ultimo_peso_medio_kg: ph.kg } : r, metaDe(l, metas)), kgSaco, l.tipo)}</div>` : ''}
+          ${r ? `<div class="td-prev"><div class="td-prev-cab"><span>${PROXIMA_FASE[l.tipo] ? 'Mudança de fase' : 'Despesca'}</span>${podeGerir ? `<span class="td-prev-links"><button class="link" type="button" data-conv="${esc(l.id)}">Conversão</button><button class="link" type="button" data-meta="${esc(l.id)}">${l.tipo === 'engorda' ? 'Peso de venda' : 'Mudar meta'}</button></span>` : ''}</div>${htmlPrevisao(previsaoDespesca(l, r, metaDe(l, metas), hoje), l.tipo)}${htmlPrevRacao(previsaoRacao(l, ph.estimado ? { ...r, ultimo_peso_medio_kg: ph.kg } : r, metaDe(l, metas), cv && cv.ca), kgSaco, l.tipo, cv && cv.origem)}</div>` : ''}
         </section>`;
       }).join('')
     : podeGerir
@@ -96,7 +97,7 @@ export async function renderTanqueDetalhe(ctx, el, id) {
     <div class="acoes4">${grandes.map((a) => `<a class="acao${a.feita ? ' feita' : ''}${a.ruim ? ' ruim' : ''}${a.alerta ? ' alerta' : ''}" href="${a.href}" data-acao="${a.tipo}">${icone(a.ic, 28)}<span>${esc(a.rot)}</span><small>${esc(a.sub)}</small></a>`).join('')}</div>`;
 
   el.innerHTML = `${semDetalhe ? '<p class="aviso">Sem conexão: os totais aparecem quando houver internet.</p>' : numerosGuardados ? '<p class="aviso">Sem conexão: números da última atualização.</p>' : ''}
-    ${htmlCardTanque(tanque, meus, resumo, D.racaoHojeLocal, hoje, metas, gerir, acoesHtml, state.ref.kgSaco || 25)}
+    ${htmlCardTanque(tanque, meus, resumo, D.racaoHojeLocal, hoje, metas, gerir, acoesHtml, state.ref.kgSaco || 25, state.ref)}
     <ul class="lista td-lista card">
       ${meus.length ? outras.map((a) => `<li><a class="item" href="${a.href}" data-acao="${a.tipo}"><span class="item-ic">${icone(a.ic)}</span><span class="esq"><b>${esc(a.rot)}</b><small>${esc(a.sub)}</small></span><span class="seta">${icone('direita', 20)}</span></a></li>`).join('') : ''}
       ${meus.length ? `<li><a class="item td-rel" href="#/relatorio/${esc(meus[0].id)}"><span class="item-ic">${icone('relatorio')}</span><span class="esq"><b>Relatório do lote</b><small>Peso, ração, mortes, água, lançamentos e PDF</small></span><span class="seta">${icone('direita', 20)}</span></a></li>` : ''}
@@ -104,6 +105,21 @@ export async function renderTanqueDetalhe(ctx, el, id) {
       ${gerir ? `<li><a class="item td-cadastro" href="#/tanque/${esc(tanque.id)}"><span class="item-ic">${icone('ajuste')}</span><span class="esq"><b>Cadastro do tanque e lotes</b><small>Nome, área, povoar, editar, encerrar ou reabrir lote</small></span><span class="seta">${icone('direita', 20)}</span></a></li>` : ''}
     </ul>`;
   if (!el.querySelector('.td-lista li')) el.querySelector('.td-lista').remove();
+  // conversão alimentar do TANQUE (sql/41): vazio = usa a da fazenda; sem nenhuma, a previsão vai pela tabela
+  el.querySelectorAll('[data-conv]').forEach((b) => b.addEventListener('click', async () => {
+    const daFazenda = Number(state.ref.conversao) > 0 ? Number(state.ref.conversao) : null;
+    const propria = Number(tanque.conversao_alimentar) > 0 ? Number(tanque.conversao_alimentar) : null;
+    const v = await pedirTexto({ titulo: 'Conversão alimentar deste tanque', rotulo: `Quantos kg de ração para cada kg de peixe ganho${daFazenda ? `. Deixe vazio para usar a da fazenda (${String(daFazenda).replace('.', ',')})` : '. Deixe vazio para calcular pela tabela de alimentação'}`,
+      valor: propria ? String(propria).replace('.', ',') : '', placeholder: daFazenda ? String(daFazenda).replace('.', ',') : 'Ex.: 1,9', maxlength: 5, vazioOk: true,
+      validar: (t) => (!String(t || '').trim() || (num(t) >= 0.5 && num(t) <= 5) ? '' : 'Informe a conversão entre 0,5 e 5, ex.: 1,9') });
+    if (v === null || v === undefined) return;
+    const ca = String(v).trim() ? Math.round(num(v) * 100) / 100 : null;
+    if (!navigator.onLine) return ctx.toast('Sem internet', 'erro');
+    try { await ctx.api.salvarConversaoTanque(tanque.id, ca); await ctx.atualizarRef(true); }
+    catch (e) { return ctx.toast(/conversao_alimentar/.test(e.message || '') ? 'Falta rodar o sql/41 no Supabase.' : e.message, 'erro'); }
+    ctx.toast(ca ? `Conversão do tanque: ${String(ca).replace('.', ',')}` : daFazenda ? 'O tanque usa a conversão da fazenda' : 'O tanque volta a usar a tabela de alimentação', 'ok');
+    return renderTanqueDetalhe(ctx, el, id);
+  }));
   el.querySelectorAll('[data-meta]').forEach((b) => b.addEventListener('click', async () => {
     const l = meus.find((x) => x.id === b.dataset.meta); if (!l) return;
     if (l.tipo === 'engorda') {
