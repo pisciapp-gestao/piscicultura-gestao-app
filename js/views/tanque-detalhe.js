@@ -1,7 +1,7 @@
 // Tela de um tanque (todos os papéis): números de cada lote, sobrevivência, previsão de despesca e atalhos para lançar.
 import { esc, fmtInt, fmtNum, fmtData, hojeISO, diasEntre, num, ROTULO_TIPO, FASES, faseCss, progresso, fmtPct } from '../util.js';
 import * as db from '../db.js';
-import { previsaoDespesca, vivosDoLote, previsaoRacao } from '../calc.js';
+import { previsaoDespesca, vivosDoLote, previsaoRacao, pesoHoje } from '../calc.js';
 import { icone } from '../icons.js';
 import { pedirTexto } from '../dialogo.js';
 import { metaDe, metasDe, htmlPrevisao, htmlPrevRacao, origemPesoVenda, PROXIMA_FASE } from './despesca.js';
@@ -16,13 +16,14 @@ export function htmlCardTanque(tanque, lotes, resumo, racaoHojeLocal, hoje, meta
         const dias = diasEntre(l.data_entrada, hoje);
         const vivos = r ? vivosDoLote(l, r) : null;
         // abaixo de 1 kg em gramas; acima, em kg como no resto do app (2,30 kg, não 2.300 g)
-        const kg = r && r.ultimo_peso_medio_kg != null ? Number(r.ultimo_peso_medio_kg) : null;
+        const ph = pesoHoje(l, r, hoje, { semEntrada: true }); // peso de hoje: última biometria + ração dada depois dela
+        const kg = ph.kg;
         const pm = kg == null ? '—' : kg < 1 ? fmtNum(kg * 1000, 0) + '<em>g</em>' : fmtNum(kg, 2) + '<em>kg</em>';
         return `
         <section class="td-lote">
           ${lotes.length > 1 ? `<p class="lote-nome"><span class="fase ${faseCss(l.tipo)}"></span>${esc(nomeLote(l))}</p>` : ''}
           <div class="td-hero">
-            <div><span>Peso médio atual</span><b>${pm}</b>${r && r.ultima_biometria ? `<small>em ${fmtData(r.ultima_biometria)}</small>` : '<small>sem biometria</small>'}</div>
+            <div><span>${ph.estimado ? 'Peso médio hoje' : 'Peso médio atual'}</span><b>${ph.estimado ? '≈ ' : ''}${pm}</b>${ph.estimado ? `<small>pela ração${ph.kgBio != null ? ` · pesado ${ph.kgBio < 1 ? fmtNum(ph.kgBio * 1000, 0) + ' g' : fmtNum(ph.kgBio, 2) + ' kg'} em ${fmtData(r.ultima_biometria)}` : ''}</small>` : r && r.ultima_biometria ? `<small>em ${fmtData(r.ultima_biometria)}</small>` : '<small>sem biometria</small>'}${ph.impossivel ? '<small class="erro-txt">confira a ração lançada: passa do que os peixes comem</small>' : ''}</div>
             <div><span>Ração acumulada</span><b>${r ? fmtNum(r.racao_kg, 0) + '<em>kg</em>' : '—'}</b><small>desde a entrada</small></div>
           </div>
           <div class="td-stats">
@@ -30,7 +31,7 @@ export function htmlCardTanque(tanque, lotes, resumo, racaoHojeLocal, hoje, meta
             <div><span>Peixes vivos (estim.)</span><b>${fmtInt(vivos ?? l.quantidade_inicial)}</b></div>
           </div>
           ${vivos != null && l.quantidade_inicial > 0 ? ((sv) => `<div class="td-sobre">${progresso((sv / l.quantidade_inicial) * 100, { tom: 'ok', rotulo: `Sobrevivência ${fmtPct((sv / l.quantidade_inicial) * 100)}%` })}<p class="h-trilho-leg"><span>Sobrevivência: ${fmtInt(sv)} de ${fmtInt(l.quantidade_inicial)} peixes${Number(r.despescados) ? ` (${fmtInt(r.despescados)} já despescados)` : ''}${Number(r.transferidos) ? ` (${fmtInt(r.transferidos)} transferidos)` : ''}</span><b>${fmtPct((sv / l.quantidade_inicial) * 100)}%</b></p></div>`)(Math.max(0, l.quantidade_inicial - (Number(r.mortos) || 0))) : ''}
-          ${r ? `<div class="td-prev"><div class="td-prev-cab"><span>${PROXIMA_FASE[l.tipo] ? 'Mudança de fase' : 'Despesca'}</span>${podeGerir ? `<button class="link" type="button" data-meta="${esc(l.id)}">${l.tipo === 'engorda' ? 'Peso de venda' : 'Mudar meta'}</button>` : ''}</div>${htmlPrevisao(previsaoDespesca(l, r, metaDe(l, metas), hoje), l.tipo)}${htmlPrevRacao(previsaoRacao(l, r, metaDe(l, metas)), kgSaco, l.tipo)}</div>` : ''}
+          ${r ? `<div class="td-prev"><div class="td-prev-cab"><span>${PROXIMA_FASE[l.tipo] ? 'Mudança de fase' : 'Despesca'}</span>${podeGerir ? `<button class="link" type="button" data-meta="${esc(l.id)}">${l.tipo === 'engorda' ? 'Peso de venda' : 'Mudar meta'}</button>` : ''}</div>${htmlPrevisao(previsaoDespesca(l, r, metaDe(l, metas), hoje), l.tipo)}${htmlPrevRacao(previsaoRacao(l, ph.estimado ? { ...r, ultimo_peso_medio_kg: ph.kg } : r, metaDe(l, metas)), kgSaco, l.tipo)}</div>` : ''}
         </section>`;
       }).join('')
     : podeGerir

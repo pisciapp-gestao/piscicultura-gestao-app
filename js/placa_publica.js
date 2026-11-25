@@ -1,4 +1,4 @@
-// Página pública do tanque (placa com QR code, sql/40). Abre sem login: quem lê a placa vê como estão os peixes
+// Página pública do tanque (placa com QR code, sql/43). Abre sem login: quem lê a placa vê como estão os peixes
 // AGORA, lido do banco na hora. Nada fica guardado no aparelho do visitante.
 // Só chega aqui o que a função placa_publica entrega: nunca R$, quantidade de peixes, mortes ou nomes da equipe.
 import { SUPABASE_URL, SUPABASE_ANON_KEY, AGUA_TAMBAQUI as AG } from './config.js';

@@ -41,7 +41,8 @@ drop policy if exists pedidos_correcao_select on pedidos_correcao;
 create policy pedidos_correcao_select on pedidos_correcao for select to authenticated
   using (fazenda_id = current_fazenda()
          and (pedido_por = auth.uid() or (current_papel() in ('dono', 'gerente') and (tanque_id is null or tem_acesso_tanque(tanque_id)))));
-revoke insert, update, delete on pedidos_correcao from anon, authenticated;
+revoke all on pedidos_correcao from anon;   -- visitante sem login nem chega à tabela (como no sql/26)
+revoke insert, update, delete on pedidos_correcao from authenticated;
 
 -- campos que cada tipo de lançamento deixa corrigir (todos numéricos)
 create or replace function campos_corrigiveis(p_tabela text) returns text[]

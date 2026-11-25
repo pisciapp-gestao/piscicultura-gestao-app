@@ -1,4 +1,4 @@
-# Placas com QR code (sql/40), com o Supabase SIMULADO:
+# Placas com QR code (sql/43), com o Supabase SIMULADO:
 # 1) a página do visitante (placa.html) em cada situação: água boa, em atenção, medição antiga, tanque vazio,
 #    placa desligada, código que não existe, sem internet; no celular (320 e 390 px) e no computador; sem transbordo.
 # 2) o dono em Fazenda › Placas: liga, escolhe o que aparece, o QR lido pela câmera abre a página certa, PDF, trocar código.

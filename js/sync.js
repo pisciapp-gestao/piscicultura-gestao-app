@@ -24,6 +24,12 @@ export async function anotarNoResumo(tabela, p) {
     if (tabela === 'racao_consumo') {
       r.racao_kg = n(r.racao_kg) + n(p.quantidade_kg);
       if (!r.ultima_racao || p.data > r.ultima_racao) r.ultima_racao = p.data;
+      // peso de hoje (sql/42): a ração depois da última biometria faz o peso subir também sem sinal
+      if (r.racao_desde_bio_kg != null) {
+        if (!r.ultima_biometria || p.data > r.ultima_biometria) r.racao_desde_bio_kg = n(r.racao_desde_bio_kg) + n(p.quantidade_kg);
+        else r.racao_ate_bio_kg = n(r.racao_ate_bio_kg) + n(p.quantidade_kg);
+      }
+      if (!r.primeira_racao || p.data < r.primeira_racao) r.primeira_racao = p.data;
     } else if (tabela === 'mortalidade') {
       r.mortos = n(r.mortos) + n(p.quantidade);
     } else if (tabela === 'despescas') {
@@ -31,6 +37,8 @@ export async function anotarNoResumo(tabela, p) {
     } else if (tabela === 'biometrias' && n(p.quantidade_amostrada) > 0 && (!r.ultima_biometria || p.data >= r.ultima_biometria)) {
       r.ultima_biometria = p.data;
       r.ultimo_peso_medio_kg = n(p.peso_amostra_kg) / n(p.quantidade_amostrada);
+      // pesagem nova: a ração até ela vira "até a biometria" e o peso de hoje recomeça desta pesagem
+      if (r.racao_desde_bio_kg != null) { r.racao_ate_bio_kg = n(r.racao_kg); r.racao_desde_bio_kg = 0; }
     } else return;
     await kvSet('resumo', linhas);
     if (tabela === 'racao_consumo') { // a lista de ração dos últimos dias (Início sem sinal) também
@@ -58,7 +66,13 @@ export async function desanotarNoResumo(tabela, p) {
     const r = Array.isArray(linhas) ? linhas.find((x) => x.lote_id === p.lote_id) : null;
     if (!r) return;
     const n = (v) => Number(v) || 0;
-    if (tabela === 'racao_consumo') r.racao_kg = Math.max(0, n(r.racao_kg) - n(p.quantidade_kg));
+    if (tabela === 'racao_consumo') {
+      r.racao_kg = Math.max(0, n(r.racao_kg) - n(p.quantidade_kg));
+      if (r.racao_desde_bio_kg != null) {
+        if (!r.ultima_biometria || p.data > r.ultima_biometria) r.racao_desde_bio_kg = Math.max(0, n(r.racao_desde_bio_kg) - n(p.quantidade_kg));
+        else r.racao_ate_bio_kg = Math.max(0, n(r.racao_ate_bio_kg) - n(p.quantidade_kg));
+      }
+    }
     else if (tabela === 'mortalidade') r.mortos = Math.max(0, n(r.mortos) - n(p.quantidade));
     else if (tabela === 'despescas') r.despescados = Math.max(0, n(r.despescados) - n(p.quantidade));
     else return;

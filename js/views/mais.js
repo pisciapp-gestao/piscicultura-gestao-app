@@ -15,6 +15,7 @@ export function renderMais(ctx, el) {
   const grupos = [
     ['No dia a dia', [
       ['#/estoque', 'estoque', 'Estoque de ração', gerir ? 'Saldo, compras e contagem' : 'Saldo de ração'],
+      gerir && ['#/racoes', 'estoque', 'Rações', 'As rações que a fazenda compra (o tratador escolhe em cada trato)'],
       gerir && ['#/despesas', 'estoque', 'Despesas gerais', 'Energia, mão de obra e outros custos'],
       ['#/meus', 'lancar', 'Meus lançamentos', 'Últimos 7 dias: desfazer, corrigir ou pedir correção'],
       gerir && ['#/pedidos', 'historico', 'Pedidos de correção', 'Aprovar ou recusar o que a equipe pediu para corrigir'],
@@ -24,7 +25,7 @@ export function renderMais(ctx, el) {
     ['Pessoas', [dono && ['#/equipe', 'equipe', 'Equipe', 'Pessoas, papéis e tanques liberados']]],
     ['Plano', [dono && ['#/plano', 'check', 'Meu plano', 'Pacote de tanques e prazo']]],
     ['Segurança', [dono && ['#/historico', 'historico', 'Histórico e lixeira', 'Quem alterou ou excluiu, e restaurar']]],
-    ['Sistema', [state.admin && ['#/admin', 'admin', 'Administração do sistema', 'Todas as fazendas, cobranças e pacotes']]],
+    ['Sistema', [state.admin && ['#/clientes', 'admin', 'Fazendas dos clientes', 'Acompanhar cada fazenda e entrar como suporte'], state.admin && ['#/admin', 'admin', 'Administração do sistema', 'Cobranças, pacotes e financeiro']]],
   ].map(([t, its]) => [t, its.filter(Boolean)]).filter(([, its]) => its.length);
   const htmlGrupo = ([titulo, its]) => `<h2 class="mais-t">${esc(titulo)}</h2><div class="card"><ul class="lista">${its.map(([href, ic, t, s]) => `
       <li><a class="item" href="${href}"><span class="item-ic">${icone(ic)}</span><span class="esq"><b>${esc(t)}</b><small>${esc(s)}</small></span><span class="seta">${icone('direita', 20)}</span></a></li>`).join('')}</ul></div>`;

@@ -1,4 +1,4 @@
-// Placas com QR code (sql/40): o dono liga a página pública de cada tanque, escolhe o que aparece,
+// Placas com QR code (sql/43): o dono liga a página pública de cada tanque, escolhe o que aparece,
 // imprime a placa e troca o código se a placa for perdida ou copiada. Fica em Fazenda › Visitantes.
 import { esc, ROTULO_TIPO, nomeArquivo } from '../util.js';
 import { icone } from '../icons.js';
@@ -7,7 +7,7 @@ import { matrizQr, svgQr, linkPlaca } from '../qr.js';
 import { carregarGerador, carregarFontes, abrirVisualizador } from '../pdf_ui.js';
 
 const faltaSql = (e) => /placa|whatsapp_visitantes/i.test((e && e.message) || '') && /exist|schema|column|relation|function|could not find/i.test((e && e.message) || '');
-const erroSql = (e) => (faltaSql(e) ? new Error('Falta rodar o sql/40 (placas com QR code) no Supabase.') : e);
+const erroSql = (e) => (faltaSql(e) ? new Error('Falta rodar o sql/43 (placas com QR code) no Supabase.') : e);
 
 function soDono(ctx, el) {
   if (ctx.state.perfil.papel === 'dono') return false;

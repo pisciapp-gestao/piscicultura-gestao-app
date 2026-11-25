@@ -9,8 +9,9 @@ import { ligarTeclado } from '../teclado.js';
 import { desfazerLancamento, minutosParaDesfazer } from '../desfazer.js';
 import { ordemNatural } from './home.js';
 import { renderTransferir } from './transferir.js';
+import { corRacao } from '../graficos.js';
 import { AGUA_LIMITES, PESO_SACO_PADRAO_KG, CAUSAS_MORTE, TAXA_RACAO } from '../config.js';
-import { sugestaoRacao, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui, tipoRacaoDoLote, faltaNoEstoque } from '../calc.js';
+import { sugestaoRacao, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui, tipoRacaoDoLote, faltaNoEstoque, racaoCertaAgora, racaoDaTabela, pesoHoje } from '../calc.js';
 
 const TIPOS = {
   racao: { rotulo: 'Ração', tabela: 'racao_consumo' },
@@ -169,6 +170,24 @@ export async function renderLancar(ctx, el, params = {}) {
   const ultimo = (await db.kvGet('ultimoTanque')) || '';
   const tanqueInicial = tanques.some((t) => t.id === params.tanque) ? params.tanque : (tanques.some((t) => t.id === ultimo) ? ultimo : tanques[0].id);
   const hoje = hojeISO();
+  // rações da fazenda (sql/39): com alguma cadastrada, todo trato tem que dizer qual ração foi (pedido de 17/11/2026).
+  // Sem internet, usa a lista guardada da última vez. Sem nenhuma, o lançamento fica como antes.
+  let racoesLanc = [], saldoDe = {};
+  if (tipo === 'racao') {
+    let lista = navigator.onLine ? await Promise.race([ctx.api.racoes().catch(() => null), new Promise((r) => setTimeout(() => r(null), 2500))]) : null;
+    if (!lista) lista = await db.kvGet('racoes').catch(() => null);
+    racoesLanc = (Array.isArray(lista) ? lista : []).filter((r) => r.ativa);
+    const sr = racoesLanc.length ? await db.kvGet('saldosRacao').catch(() => null) : null;
+    if (sr && sr.porRacao) for (const x of sr.racoes || []) saldoDe[x.racao_id] = Number(x.saldo_kg) || 0;
+  }
+  const porRacao = racoesLanc.length > 0;
+  let racaoEscolhida = null;
+  const nomeRacao = (id) => (racoesLanc.find((r) => r.id === id) || {}).nome || '';
+  const tileRacao = (r) => {
+    const tem = Object.prototype.hasOwnProperty.call(saldoDe, r.id), sac = tem ? Math.max(0, saldoDe[r.id] / kgSaco) : null;
+    const sub = !tem ? '' : sac < 0.05 ? 'sem estoque' : `${fmtNum(sac, sac % 1 < 0.05 || sac % 1 > 0.95 ? 0 : 1)} ${Math.round(sac) === 1 ? 'saco' : 'sacos'}`;
+    return `<button type="button" class="rc-tile${tem && sac < 0.05 ? ' zero' : ''}" role="radio" aria-checked="false" data-racao="${esc(r.id)}" style="--cor:${corRacao(r.cor)}"><b>${esc(r.nome)}</b>${sub ? `<small>${sub}</small>` : ''}</button>`;
+  };
 
   el.classList.remove('modo-sucesso');
   el.innerHTML = `
@@ -191,8 +210,15 @@ export async function renderLancar(ctx, el, params = {}) {
         <label id="lote-wrap">Qual lote? <select id="lote"></select></label>
         <p id="aviso-lotes" class="aviso" hidden></p>
       </section>
+      ${porRacao ? `<section class="passo tipo-racao rc-escolha" id="rc-escolha">
+        <h2 class="passo-t"><i>2</i> Qual ração?</h2>
+        <p class="rc-diz" id="rc-diz" hidden></p>
+        <div class="rc-tiles" role="radiogroup" aria-label="Qual ração foi dada">${racoesLanc.map(tileRacao).join('')}</div>
+        <p class="erro" id="rc-erro" hidden>Escolha qual ração foi dada.</p>
+        <p class="aviso rc-outra" id="rc-outra" role="status" hidden></p>
+      </section>` : ''}
       <section class="passo tipo-${tipo}">
-        <h2 class="passo-t"><i>2</i> ${TITULO2[tipo]}</h2>
+        <h2 class="passo-t"><i>${porRacao ? 3 : 2}</i> ${TITULO2[tipo]}</h2>
         ${camposDoTipo(tipo, kgSaco, ctx.verDinheiro && ctx.verDinheiro())}
         <div class="data-linha"><span>Data: <b id="data-txt">hoje</b></span><button type="button" class="link" id="b-data">Mudar</button></div>
         <label id="data-wrap" hidden>Data <input id="data" type="date" value="${hoje}" max="${hoje}" required></label>
@@ -244,6 +270,30 @@ export async function renderLancar(ctx, el, params = {}) {
   const selLote = f.querySelector('#lote');
   const erro = f.querySelector('#erro');
   const mostrarErro = (m) => { erro.textContent = m; erro.hidden = false; };
+  // escolha da ração (obrigatória quando a fazenda tem rações cadastradas)
+  const rcBox = el.querySelector('#rc-escolha');
+  if (rcBox) rcBox.querySelectorAll('[data-racao]').forEach((b) => b.addEventListener('click', () => {
+    racaoEscolhida = b.dataset.racao;
+    rcBox.querySelectorAll('[data-racao]').forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); });
+    rcBox.querySelector('#rc-erro').hidden = true; rcBox.classList.remove('falta');
+    avisarOutraRacao();
+  }));
+  // o que a tabela pede para este tanque (preenchido por marcarPelaTabela)
+  let pelaTabela = null; // { id, nome, txtPeso, racao }
+  function avisarOutraRacao() {
+    const av = rcBox && rcBox.querySelector('#rc-outra');
+    if (!av) return;
+    const outra = pelaTabela && pelaTabela.id && racaoEscolhida && racaoEscolhida !== pelaTabela.id;
+    av.hidden = !outra;
+    if (!outra) return;
+    const esc1 = racoesLanc.find((r) => r.id === racaoEscolhida);
+    av.innerHTML = `Você escolheu <b>${esc(esc1 ? esc1.nome : 'outra ração')}</b>, mas para peixe de ${esc(pelaTabela.txtPeso)} a tabela pede <b>${esc(pelaTabela.nome)}</b>. Pode salvar assim mesmo, se foi isso que deu.`;
+  }
+  const faltaRacao = () => {
+    rcBox.querySelector('#rc-erro').hidden = false;
+    rcBox.classList.remove('falta'); void rcBox.offsetWidth; rcBox.classList.add('falta');
+    rcBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
 
   function montarLotes() {
     const doTanque = lotes.filter((l) => l.tanque_id === selTanque.value);
@@ -316,7 +366,7 @@ export async function renderLancar(ctx, el, params = {}) {
       const r = dadosPainel && dadosPainel.res[l.id];
       ini += Number(l.quantidade_inicial) || 0; mortos += Number(r && r.mortos) || 0;
       vivos += vivosDoLote(l, r);
-      if (r && r.ultimo_peso_medio_kg != null) pm = Number(r.ultimo_peso_medio_kg);
+      const ph = pesoHoje(l, r, hojeISO(), { semEntrada: true }); if (ph.kg != null) pm = ph.kg;
     }
     painel.innerHTML = `
       <p class="lc-cab">Resumo do tanque</p>
@@ -351,7 +401,7 @@ export async function renderLancar(ctx, el, params = {}) {
     for (const l of doTanque) {
       const r = d.res[l.id], qi = Number(l.quantidade_inicial) || 0;
       const v = vivosDoLote(l, r);
-      const p = r && r.ultimo_peso_medio_kg != null ? Number(r.ultimo_peso_medio_kg) : qi > 0 ? Number(l.peso_inicial_kg) / qi : null;
+      const p = pesoHoje(l, r, hojeISO()).kg;
       vivos += v;
       if (p != null) kg += v * p;
       if (doTanque.length === 1) pm = p;
@@ -524,7 +574,37 @@ export async function renderLancar(ctx, el, params = {}) {
       <small>${fmtNum(sug.pct, 1)}% do peso vivo${ctx.podeGerir() ? ` (${bio} de peixe)` : ''}${sug.provisoria ? ' · taxa provisória, confirme com o técnico' : ''}</small>`;
     box.querySelector('#b-sug').onclick = () => { const q = f.querySelector('#racao-kg'); q.value = kgTxt(kgSug); q.dispatchEvent(new Event('input')); q.focus(); };
   }
+  // "pela tabela": frase acima dos botões (peso médio → ração e tratos da tabela), etiqueta no botão da ração indicada
+  // e aviso amarelo se o tratador escolher outra. Só dica: nada vem marcado e o aviso não bloqueia (pedido de 17/11/2026).
+  async function marcarPelaTabela() {
+    if (!rcBox) return;
+    rcBox.querySelectorAll('.rc-tag').forEach((x) => x.remove());
+    const diz = rcBox.querySelector('#rc-diz');
+    diz.hidden = true; pelaTabela = null;
+    if (!resumoLotes) resumoLotes = navigator.onLine ? Object.fromEntries(((await ctx.api.resumoLotes().catch(() => [])) || []).map((r) => [r.lote_id, r]))
+      : Object.fromEntries(((await ctx.api.resumoGuardado().catch(() => [])) || []).map((r) => [r.lote_id, r]));
+    let peixes = 0, kg = 0;
+    for (const l of lotes.filter((x) => x.tanque_id === selTanque.value)) {
+      const r = resumoLotes[l.id], qi = Number(l.quantidade_inicial) || 0, v = vivosDoLote(l, r);
+      const pm = pesoHoje(l, r, hojeISO()).kg;
+      if (pm > 0 && v > 0) { peixes += v; kg += v * pm; }
+    }
+    const t = peixes > 0 ? racaoCertaAgora(kg / peixes) : null;
+    const certa = t && racaoDaTabela(t.racao, racoesLanc);
+    const b = certa && rcBox.querySelector(`[data-racao="${certa.id}"]`);
+    if (b) b.insertAdjacentHTML('beforeend', '<em class="rc-tag">pela tabela</em>');
+    if (t) {
+      const pm = kg / peixes, porTrato = (kg * t.pct) / 100 / t.tratos;
+      const kgT = porTrato < 10 ? Math.round(porTrato * 10) / 10 : Math.round(porTrato);
+      pelaTabela = { id: b ? certa.id : null, nome: b ? certa.nome : t.racao, txtPeso: pesoMedioTxt(pm), racao: t.racao };
+      diz.innerHTML = `Peixe médio de <b>${esc(pesoMedioTxt(pm))}</b>: a tabela pede <b>${esc(t.racao)}</b>, ${t.tratos} tratos de ${esc(kgTxt(kgT))} kg.`
+        + (b ? '' : ' <span>A fazenda não tem essa ração cadastrada.</span>');
+      diz.hidden = false;
+    }
+    avisarOutraRacao();
+  }
   if (tipo === 'racao') { mostrarSugestao(); selTanque.addEventListener('change', mostrarSugestao); }
+  if (porRacao) { marcarPelaTabela(); selTanque.addEventListener('change', marcarPelaTabela); }
   if (tipo === 'racao') {
     const q = f.querySelector('#racao-kg'), conv = f.querySelector('#conv');
     q.addEventListener('input', () => { const n = kgDigitado(q.value); conv.textContent = n > 0 ? kgEmSacosTxt(n, kgSaco) : `Digite o total em kg. Ex.: 600 kg = ${sacosTxt(sacosDeKg(600, kgSaco))}`; });
@@ -609,19 +689,20 @@ export async function renderLancar(ctx, el, params = {}) {
 
   // Estoque registrado não cobre este lançamento de ração: avisa e pede a compra, mas deixa lançar (o peixe
   // já comeu; travar o funcionário no tanque só faria o lançamento ficar sem registro). Sem saldo conhecido, não pergunta.
-  async function estoqueConferido(lote, kg) {
+  async function estoqueConferido(lote, kg, racaoId = null) {
     try {
       const tipoR = tipoRacaoDoLote(lote && lote.tipo);
       if (navigator.onLine) ctx.api.saldosRacao().catch(() => null); // atualiza a cópia para a próxima vez
       const s = await db.kvGet('saldosRacao');
       if (!s || !Array.isArray(s.linhas) || !s.linhas.length) return true;
-      const linha = s.porTipo ? s.linhas.find((x) => x.tipo_racao === tipoR) : s.linhas[0];
+      if (!!racaoId !== !!s.porRacao) return true; // cópia de antes do cadastro (ou de depois): não dá para comparar
+      const linha = racaoId ? (s.racoes || []).find((x) => x.racao_id === racaoId) : s.porTipo ? s.linhas.find((x) => x.tipo_racao === tipoR) : s.linhas[0];
       const pend = (await db.filaList()).filter((i) => i.tabela === 'racao_consumo'
-        && (!s.porTipo || tipoRacaoDoLote((lotes.find((l) => l.id === i.payload.lote_id) || {}).tipo) === tipoR))
+        && (racaoId ? i.payload.racao_id === racaoId : !s.porTipo || tipoRacaoDoLote((lotes.find((l) => l.id === i.payload.lote_id) || {}).tipo) === tipoR))
         .reduce((t, i) => t + Number(i.payload.quantidade_kg || 0), 0);
       const falta = faltaNoEstoque(linha ? linha.saldo_kg : 0, pend, kg);
       if (!falta) return true;
-      const kgSaco = state.ref.kgSaco || PESO_SACO_PADRAO_KG, nome = s.porTipo ? `ração de ${tipoR}` : 'ração';
+      const kgSaco = state.ref.kgSaco || PESO_SACO_PADRAO_KG, nome = racaoId ? `ração ${nomeRacao(racaoId)}` : s.porTipo ? `ração de ${tipoR}` : 'ração';
       const sacosTxt = `${fmtNum(Math.ceil((falta / kgSaco) * 10) / 10, 1).replace(/,0$/, '')} ${falta / kgSaco <= 1 ? 'saco' : 'sacos'}`;
       return confirmar({
         titulo: `Falta ${nome} no estoque`,
@@ -632,7 +713,7 @@ export async function renderLancar(ctx, el, params = {}) {
   }
 
   // o lançamento em palavras: "600 kg de ração (24 sacos)", "12 peixes mortos"...
-  const resumoDe = (payload) => (tipo === 'racao' ? `${kgTxt(payload.quantidade_kg)} kg de ração (${sacosTxt(sacosDeKg(payload.quantidade_kg, kgSaco))})`
+  const resumoDe = (payload) => (tipo === 'racao' ? `${kgTxt(payload.quantidade_kg)} kg de ração${payload.racao_id ? ` ${nomeRacao(payload.racao_id)}` : ''} (${sacosTxt(sacosDeKg(payload.quantidade_kg, kgSaco))})`
     : tipo === 'biometria' ? `${pesoMedioTxt(payload.peso_amostra_kg / payload.quantidade_amostrada)} de peso médio (${fmtInt(payload.quantidade_amostrada)} peixes pesados)`
     : tipo === 'agua' ? [payload.oxigenio_mgl != null && `O₂ ${fmtNum(payload.oxigenio_mgl, 1)} mg/L`, payload.temperatura_c != null && `${fmtNum(payload.temperatura_c, 1)} °C`, payload.ph != null && `pH ${fmtNum(payload.ph, 1)}`, payload.amonia_mgl != null && `amônia ${fmtNum(payload.amonia_mgl, 2)} mg/L`].filter(Boolean).join(' · ')
     : tipo === 'manejo' ? `${payload.produto}: ${String(payload.dose).replace('.', ',')} ${payload.unidade} ${payload.via === 'agua' ? 'na água' : 'na ração'}`
@@ -658,8 +739,9 @@ export async function renderLancar(ctx, el, params = {}) {
       if (kgTxtCampo.includes('.') && kgTxtCampo.includes(',')) return mostrarErro('Digite os kg sem ponto de milhar. Ex.: 1250,5');
       if (!(q > 0)) return mostrarErro('Informe quantos kg de ração foram dados (pode ter vírgula: 37,5).');
       if (q > 5000) return mostrarErro('Quantidade muito alta para um tanque num dia. Confira os kg.');
-      payload = { ...base, tanque_id: selTanque.value, quantidade_kg: Math.round(q * 100) / 100 };
-      if (!(await estoqueConferido(loteSel, payload.quantidade_kg))) return;
+      if (porRacao && !racaoEscolhida) return faltaRacao();
+      payload = { ...base, tanque_id: selTanque.value, quantidade_kg: Math.round(q * 100) / 100, ...(porRacao ? { racao_id: racaoEscolhida } : {}) };
+      if (!(await estoqueConferido(loteSel, payload.quantidade_kg, payload.racao_id))) return;
     } else if (tipo === 'biometria') {
       const pesoTxt = f.querySelector('#peso').value, p = pesoAmostraKg(), q = num(f.querySelector('#amostra').value);
       if (pesoTxt.includes('.') && pesoTxt.includes(',')) return mostrarErro('Digite o peso sem ponto de milhar. Ex.: 1250,5');

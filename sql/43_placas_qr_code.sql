@@ -1,5 +1,5 @@
 -- ============================================================
--- 40. PLACAS COM QR CODE (página pública de cada tanque)
+-- 43. PLACAS COM QR CODE (página pública de cada tanque)
 -- Rode no SQL Editor do Supabase. Pode rodar de novo sem estragar nada.
 --
 -- Pedido de 16/11/2026: placa na beira do tanque para estudantes, Embrapa e visitantes. Quem aponta o

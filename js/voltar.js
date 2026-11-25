@@ -5,13 +5,13 @@ import { icone } from './icons.js';
 import { esc } from './util.js';
 
 const PADRAO = {
-  t: ['#/tanques', 'Tanques'], tanque: ['#/tanques', 'Tanques'], ronda: ['#/', 'Hoje'], lancar: ['#/', 'Hoje'], meus: ['#/', 'Hoje'], pedidos: ['#/', 'Hoje'], estoque: ['#/mais', 'Fazenda'],
+  t: ['#/tanques', 'Tanques'], tanque: ['#/tanques', 'Tanques'], ronda: ['#/', 'Hoje'], lancar: ['#/', 'Hoje'], meus: ['#/', 'Hoje'], pedidos: ['#/', 'Hoje'], estoque: ['#/mais', 'Fazenda'], racoes: ['#/mais', 'Fazenda'],
   equipe: ['#/mais', 'Fazenda'], plano: ['#/mais', 'Fazenda'], historico: ['#/mais', 'Fazenda'], pendencias: ['#/mais', 'Fazenda'],
-  admin: ['#/mais', 'Fazenda'], placas: ['#/mais', 'Fazenda'], placa: ['#/placas', 'Placas com QR code'], relatorio: ['#/relatorio', 'Relatórios'], lucro: ['#/relatorio', 'Relatórios'], despesas: ['#/lucro', 'Lucro por ciclo'],
+  admin: ['#/mais', 'Fazenda'], clientes: ['#/mais', 'Fazenda'], placas: ['#/mais', 'Fazenda'], placa: ['#/placas', 'Placas com QR code'], relatorio: ['#/relatorio', 'Relatórios'], lucro: ['#/relatorio', 'Relatórios'], despesas: ['#/lucro', 'Lucro por ciclo'],
 };
 const NOME = {
-  '': 'Hoje', ronda: 'Ronda', lancar: 'Lançar', meus: 'Meus lançamentos', pedidos: 'Pedidos de correção', mais: 'Fazenda', fazenda: 'Fazenda', tanques: 'Tanques', tanque: 'Tanque', t: 'Tanque', estoque: 'Estoque',
-  equipe: 'Equipe', plano: 'Meu plano', historico: 'Histórico', pendencias: 'Pendentes', admin: 'Administração', lucro: 'Lucro por ciclo', despesas: 'Despesas gerais', placas: 'Placas com QR code', placa: 'Placa',
+  '': 'Hoje', ronda: 'Ronda', lancar: 'Lançar', meus: 'Meus lançamentos', pedidos: 'Pedidos de correção', mais: 'Fazenda', fazenda: 'Fazenda', tanques: 'Tanques', tanque: 'Tanque', t: 'Tanque', estoque: 'Estoque', racoes: 'Rações',
+  equipe: 'Equipe', plano: 'Meu plano', historico: 'Histórico', pendencias: 'Pendentes', admin: 'Administração', clientes: 'Fazendas dos clientes', lucro: 'Lucro por ciclo', despesas: 'Despesas gerais', placas: 'Placas com QR code', placa: 'Placa',
 };
 const partesDe = (hash) => String(hash || '#/').replace(/^#\/?/, '').split('?')[0].split('/');
 const nomeDe = (hash) => {
