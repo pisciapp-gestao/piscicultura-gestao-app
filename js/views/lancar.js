@@ -11,7 +11,7 @@ import { ordemNatural } from './home.js';
 import { renderTransferir } from './transferir.js';
 import { corRacao } from '../graficos.js';
 import { AGUA_LIMITES, PESO_SACO_PADRAO_KG, CAUSAS_MORTE, TAXA_RACAO } from '../config.js';
-import { sugestaoRacao, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui, tipoRacaoDoLote, faltaNoEstoque, racaoCertaAgora, racaoDaTabela } from '../calc.js';
+import { sugestaoRacao, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui, tipoRacaoDoLote, faltaNoEstoque, racaoCertaAgora, racaoDaTabela, pesoHoje } from '../calc.js';
 
 const TIPOS = {
   racao: { rotulo: 'Ração', tabela: 'racao_consumo' },
@@ -366,7 +366,7 @@ export async function renderLancar(ctx, el, params = {}) {
       const r = dadosPainel && dadosPainel.res[l.id];
       ini += Number(l.quantidade_inicial) || 0; mortos += Number(r && r.mortos) || 0;
       vivos += vivosDoLote(l, r);
-      if (r && r.ultimo_peso_medio_kg != null) pm = Number(r.ultimo_peso_medio_kg);
+      const ph = pesoHoje(l, r, hojeISO(), { semEntrada: true }); if (ph.kg != null) pm = ph.kg;
     }
     painel.innerHTML = `
       <p class="lc-cab">Resumo do tanque</p>
@@ -401,7 +401,7 @@ export async function renderLancar(ctx, el, params = {}) {
     for (const l of doTanque) {
       const r = d.res[l.id], qi = Number(l.quantidade_inicial) || 0;
       const v = vivosDoLote(l, r);
-      const p = r && r.ultimo_peso_medio_kg != null ? Number(r.ultimo_peso_medio_kg) : qi > 0 ? Number(l.peso_inicial_kg) / qi : null;
+      const p = pesoHoje(l, r, hojeISO()).kg;
       vivos += v;
       if (p != null) kg += v * p;
       if (doTanque.length === 1) pm = p;
@@ -586,7 +586,7 @@ export async function renderLancar(ctx, el, params = {}) {
     let peixes = 0, kg = 0;
     for (const l of lotes.filter((x) => x.tanque_id === selTanque.value)) {
       const r = resumoLotes[l.id], qi = Number(l.quantidade_inicial) || 0, v = vivosDoLote(l, r);
-      const pm = r && r.ultimo_peso_medio_kg != null ? Number(r.ultimo_peso_medio_kg) : qi > 0 ? Number(l.peso_inicial_kg) / qi : null;
+      const pm = pesoHoje(l, r, hojeISO()).kg;
       if (pm > 0 && v > 0) { peixes += v; kg += v * pm; }
     }
     const t = peixes > 0 ? racaoCertaAgora(kg / peixes) : null;

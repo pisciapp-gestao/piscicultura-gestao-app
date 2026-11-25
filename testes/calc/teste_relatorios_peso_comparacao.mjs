@@ -1,7 +1,7 @@
 // Relatórios (23/11/2026): peso de hoje estimado pela ração e comparação entre tanques no relatório geral.
 // Uso: node testes/calc/teste_relatorios_peso_comparacao.mjs
 import assert from 'node:assert/strict';
-import { pesoPelaRacao, racaoTabelaPorPeixe, calcularLote, pesoTabelaApos } from '../../js/calc.js';
+import { pesoPelaRacao, racaoTabelaPorPeixe, calcularLote, pesoTabelaApos, pesoHoje, pesoMedioKg } from '../../js/calc.js';
 import { compararTanques } from '../../js/pdf_fazenda.js';
 
 const ok = (m) => console.log('OK   ' + m);
@@ -54,6 +54,40 @@ ok('ração normal por 3 semanas: estima sem aviso');
 const avisoR = compararTanques([{ nomeTanque: 'T9', lote: { tipo: 'engorda' }, c: { ...errado } }, { nomeTanque: 'T8', lote: { tipo: 'engorda' }, c: { ...c } }], '2026-11-23');
 assert.ok(avisoR.avisos.some((a) => a.startsWith('T9: ração lançada desde 20/11/2026 (500.240 kg)')), avisoR.avisos.join(' | '));
 ok('relatório geral: o aviso da ração impossível entra no "O que olhar"');
+
+// ---------- peso de hoje nas telas (linha do resumo_lotes do sql/42) = o mesmo do relatório do lote ----------
+const resumoDe = (lt, bs, ms, rs, hoje) => {
+  const ub = bs.length ? bs[bs.length - 1] : null, dentro = rs.filter((r) => r.data <= hoje);
+  const tot = dentro.reduce((t, r) => t + r.quantidade_kg, 0);
+  const ate = ub ? dentro.filter((r) => r.data <= ub.data).reduce((t, r) => t + r.quantidade_kg, 0) : 0;
+  return { racao_kg: tot, mortos: ms.reduce((t, m) => t + m.quantidade, 0), despescados: 0, transferidos: 0,
+    ultimo_peso_medio_kg: ub ? pesoMedioKg(ub) : null, ultima_biometria: ub ? ub.data : null,
+    racao_ate_bio_kg: ate, racao_desde_bio_kg: tot - ate, primeira_racao: dentro.map((r) => r.data).sort()[0] || null };
+};
+let comEst = 0;
+for (let i = 0; i < 2000; i++) {
+  const qi = 1000 + Math.floor(rnd() * 20000), pmIni = 0.005 + rnd() * 0.5, ent = '2026-06-01';
+  const lt = { id: 'X', ativo: true, especie: 'Tambaqui', tipo: 'engorda', data_entrada: ent, quantidade_inicial: qi, peso_inicial_kg: qi * pmIni };
+  const dias = 30 + Math.floor(rnd() * 150), hoje = new Date(Date.UTC(2026, 5, 1 + dias)).toISOString().slice(0, 10);
+  const rs = []; const kgDia = qi * pmIni * (0.01 + rnd() * 0.04);
+  for (let k = 0; k <= dias; k++) rs.push({ data: new Date(Date.UTC(2026, 5, 1 + k)).toISOString().slice(0, 10), quantidade_kg: kgDia * (1 + k / 60) });
+  const bs = []; const nb = Math.floor(rnd() * 3);
+  for (let k = 1; k <= nb; k++) { const d = Math.floor((dias * k) / (nb + 1)); bs.push({ data: new Date(Date.UTC(2026, 5, 1 + d)).toISOString().slice(0, 10), peso_amostra_kg: pmIni * (1 + d / 15) * 50, quantidade_amostrada: 50 }); }
+  const ms = rnd() < 0.5 ? [{ data: ent, quantidade: Math.floor(qi * rnd() * 0.1) }] : [];
+  const c1 = calcularLote(lt, bs, ms, rs, hoje);
+  const ph = pesoHoje(lt, resumoDe(lt, bs, ms, rs, hoje), hoje, { semEntrada: true });
+  const a1 = c1.pmEstimadoG != null ? c1.pmEstimadoG / 1000 : null, a2 = ph.estimado ? ph.kg : null;
+  assert.ok((a1 == null) === (a2 == null) && (a1 == null || Math.abs(a1 - a2) < 1e-9), `caso ${i}: relatório ${a1} × telas ${a2}`);
+  assert.equal(!!c1.racaoImpossivel, !!ph.impossivel, `caso ${i}: aviso de ração a mais igual`);
+  if (a1 != null) comEst++;
+}
+assert.ok(comEst > 500, 'a maioria dos casos tem estimativa');
+ok(`2 mil lotes aleatórios: o peso de hoje das telas é o mesmo do relatório do lote (${comEst} com estimativa)`);
+const semCol = pesoHoje(lote, { ultimo_peso_medio_kg: 0.8, ultima_biometria: '2026-11-20', racao_kg: 999 }, '2026-11-23');
+assert.equal(semCol.kg, 0.8); assert.equal(semCol.estimado, false);
+ok('banco ainda sem o sql/42 (sem as colunas novas): usa o peso da biometria, como antes');
+assert.equal(pesoHoje({ ...lote, especie: 'Tilápia' }, resumoDe(lote, bios, [], rac, '2026-11-23'), '2026-11-23').estimado, false);
+ok('outra espécie: peso da biometria');
 
 // ---------- comparação entre tanques ----------
 const L = (nome, tipo, ca, gpd, sobrevivencia, dataUltimaBio) => ({ nomeTanque: nome, lote: { tipo }, c: { ca, gpd, sobrevivencia, dataUltimaBio } });
