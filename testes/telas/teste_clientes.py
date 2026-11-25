@@ -35,7 +35,7 @@ ACOMP = [
 
 def abrir(pw, vp, admin=True, sql42=True):
     b = pw.chromium.launch(**LANCAR); pg = b.new_page(reduced_motion='reduce', viewport=vp)
-    est = {'rpc': [], 'erros': [], 'sup': None}
+    est = {'rpc': [], 'erros': [], 'sup': None, 'placas': set()}
     pg.on('pageerror', lambda e: est['erros'].append(str(e)))
     def rota(route, req):
         u = req.url
@@ -58,6 +58,9 @@ def abrir(pw, vp, admin=True, sql42=True):
             if fn == 'admin_acompanhamento':
                 if not sql42: return js({'code': 'PGRST202', 'message': 'Could not find the function public.admin_acompanhamento'}, 404)
                 return js(ACOMP)
+            if fn == 'admin_placas_liberadas': return js(sorted(est['placas']))
+            if fn == 'admin_liberar_placas':
+                (est['placas'].add if corpo['p_liberar'] else est['placas'].discard)(corpo['p_fazenda']); return js(corpo['p_liberar'])
             if fn == 'admin_config': return js({'modo_piloto': False})
             if fn.startswith('admin_'): return js([])
             if fn == 'saldo_racao': return js([{'saldo_kg': 0, 'consumo_7d_kg': 0}])
@@ -125,6 +128,22 @@ with sync_playwright() as pw:
         checa('Piscicultura Lua' in pg.inner_text('.adm-ficha'), f'{nome}: "Ficha e cobrança" abre a ficha da fazenda no painel')
         checa(not est['erros'], f'{nome}: sem erro de JavaScript {est["erros"][:2]}')
         b.close()
+
+    # placas com QR code: serviço à parte, o administrador libera e retira pela ficha da fazenda
+    b, pg, est = abrir(pw, {'width': 390, 'height': 844})
+    pg.goto(BASE + f'#/admin?f={FA}'); pg.wait_for_selector('.adm-ficha', timeout=20000); pg.wait_for_timeout(500)
+    pg.click(f'[data-placas-liberar="{FA}"]'); dlg = pg.locator('.dialogo', has_text='Liberar as placas'); dlg.wait_for(timeout=8000)
+    checa('contratar' in dlg.inner_text(), 'liberar placas: lembra de liberar depois que o cliente contratar')
+    dlg.locator('[data-ok]').click(); pg.wait_for_selector(f'[data-placas-retirar="{FA}"]', timeout=15000)
+    checa(any(r[0] == 'admin_liberar_placas' and r[1] == {'p_fazenda': FA, 'p_liberar': True} for r in est['rpc']), 'administrador libera as placas da São Carlos')
+    pg.goto(BASE + '#/clientes'); pg.wait_for_selector('.cli-card', timeout=20000)
+    checa('Placas QR' in cartao(pg, FA).inner_text() and 'Placas QR' not in cartao(pg, FB).inner_text(), 'na lista, só a fazenda liberada mostra "Placas QR"')
+    pg.goto(BASE + f'#/admin?f={FA}'); pg.wait_for_selector(f'[data-placas-retirar="{FA}"]', timeout=20000)
+    pg.click(f'[data-placas-retirar="{FA}"]'); dlg = pg.locator('.dialogo', has_text='Retirar as placas'); dlg.wait_for(timeout=8000)
+    checa('indisponível' in dlg.inner_text(), 'retirar avisa que as placas impressas param de mostrar os dados')
+    dlg.locator('[data-ok]').click(); pg.wait_for_selector(f'[data-placas-liberar="{FA}"]', timeout=15000)
+    checa(FA not in est['placas'] and not est['erros'], 'administrador retira as placas, sem erro')
+    b.close()
 
     # sem o sql/42 no banco: a lista e o suporte funcionam, com aviso
     b, pg, est = abrir(pw, {'width': 390, 'height': 844}, sql42=False)

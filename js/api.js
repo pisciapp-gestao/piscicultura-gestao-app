@@ -89,6 +89,37 @@ export function criarApi(client) {
     async salvarPesoVendaTanque(tanqueId, kg) {
       ok(await client.from('tanques').update({ peso_venda_kg: kg }).eq('id', tanqueId));
     },
+    // placas com QR code (sql/43): serviço à parte, liberado por fazenda pelo administrador do sistema
+    async placasLiberadas() {
+      const { data, error } = await client.from('fazendas').select('placas_liberadas').maybeSingle();
+      if (error) { if (/placas_liberadas/i.test(error.message || '')) return false; ok({ error }); }
+      return !!(data && data.placas_liberadas);
+    },
+    async adminLiberarPlacas(fazendaId, liberar) { return ok(await client.rpc('admin_liberar_placas', { p_fazenda: fazendaId, p_liberar: !!liberar })); },
+    async adminPlacasLiberadas() {
+      const { data, error } = await client.rpc('admin_placas_liberadas');
+      if (error) return null; // sql/43 ainda não rodado
+      return new Set((data || []).map((x) => (typeof x === 'string' ? x : x.admin_placas_liberadas || x.id)));
+    },
+    // placas com QR code (sql/43): só o dono lê e muda
+    async placas() {
+      return ok(await client.from('placas').select('*')) || [];
+    },
+    async salvarPlaca(tanqueId, c = {}) {
+      const d = ok(await client.rpc('placa_salvar', { p_tanque: tanqueId, p_ligada: c.ligada ?? null, p_agua: c.agua ?? null, p_crescimento: c.crescimento ?? null, p_fases: c.fases ?? null, p_whatsapp: c.whatsapp ?? null }));
+      return Array.isArray(d) ? d[0] : d;
+    },
+    async trocarCodigoPlaca(tanqueId) {
+      return ok(await client.rpc('placa_trocar_codigo', { p_tanque: tanqueId }));
+    },
+    async whatsappVisitantes() {
+      const { data, error } = await client.from('fazendas').select('whatsapp_visitantes').maybeSingle();
+      if (error) throw new ErroApi(error);
+      return (data && data.whatsapp_visitantes) || null;
+    },
+    async salvarWhatsappVisitantes(numero) {
+      return ok(await client.rpc('placa_salvar_whatsapp', { p_numero: numero || null }));
+    },
     async salvarKgSaco(fazendaId, kg) {
       ok(await client.from('fazendas').update({ kg_saco: kg }).eq('id', fazendaId));
     },

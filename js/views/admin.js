@@ -44,9 +44,10 @@ export async function renderAdmin(ctx, el, aba = 'fazendas', estado = { filtro: 
   if (!ctx.state.admin) { el.innerHTML = '<div class="card vazio">Somente administradores do sistema.</div>'; return; }
   el.innerHTML = `<h1>Administração</h1><p class="carregando">Carregando…</p>`;
   if (!navigator.onLine) { el.innerHTML = `<h1>Administração</h1><div class="card vazio">Precisa de internet.</div>`; return; }
-  const [fazendas, cobrancas, pacotes, config, fin] = await Promise.all([
+  const [fazendas, cobrancas, pacotes, config, fin, placasLib] = await Promise.all([
     ctx.api.adminFazendas(), ctx.api.adminCobrancas(), ctx.api.adminPacotes(), ctx.api.adminConfig(),
     aba === 'financeiro' ? ctx.api.adminFinanceiro() : Promise.resolve(undefined),
+    ctx.api.adminPlacasLiberadas().catch(() => null),
   ]);
   const pendentes = cobrancas.filter((c) => c.status === 'pendente');
   const conta = (g) => fazendas.filter((f) => situacao(f).grupo === g).length;
@@ -128,6 +129,9 @@ export async function renderAdmin(ctx, el, aba = 'fazendas', estado = { filtro: 
         ${acaoLi(`data-suporte="${esc(f.id)}"`, 'Entrar como suporte', 'Ver e alterar tudo como o dono, por 2 horas. Fica no histórico da fazenda', ' adm-principal')}
         ${acaoLi(`data-estender="${esc(f.id)}"`, p.estado === 'livre' ? 'Dar prazo de teste' : 'Estender teste', 'Mais dias de uso grátis')}
         ${acaoLi(`data-documento="${esc(f.id)}"`, f.documento ? 'Corrigir CPF/CNPJ' : 'Informar CPF/CNPJ', 'Um teste grátis por documento')}
+        ${placasLib ? (placasLib.has(f.id)
+          ? acaoLi(`data-placas-retirar="${esc(f.id)}"`, 'Retirar as placas com QR code', 'Serviço à parte liberado. Retirar desliga as placas impressas')
+          : acaoLi(`data-placas-liberar="${esc(f.id)}"`, 'Liberar as placas com QR code', 'Serviço à parte: libere depois que o cliente contratar')) : ''}
         ${acaoLi(`data-desconectar-dono="${esc(f.id)}"`, 'Desconectar celular do dono', 'Perdeu o celular? Sai da conta em todos os aparelhos')}
         ${f.bloqueada ? acaoLi(`data-liberar="${esc(f.id)}"`, 'Liberar a fazenda', 'Volta a funcionar como antes')
           : acaoLi(`data-bloquear="${esc(f.id)}"`, 'Bloquear a fazenda', 'Ninguém vê nem lança até liberar. Os dados ficam guardados', ' perigo')}
@@ -288,6 +292,17 @@ export async function renderAdmin(ctx, el, aba = 'fazendas', estado = { filtro: 
       const f = fazPor(b.dataset.desconectarDono);
       if (!(await confirmar({ titulo: `Desconectar o celular do dono de ${f.nome}?`, texto: `${f.dono_nome || 'O dono'} sai da conta em todos os aparelhos (o perdido apaga os números quando pegar sinal). Ele entra de novo no celular novo com o e-mail e a senha; se esqueceu a senha, usa "Esqueci a senha".`, ok: 'Desconectar', perigo: true }))) return;
       acao(() => ctx.api.adminDesconectarDono(f.id), (n) => (n ? `${n === 1 ? '1 aparelho desconectado' : `${n} aparelhos desconectados`}` : 'Nenhum aparelho do dono estava conectado'));
+    }));
+    // placas com QR code: serviço à parte (sql/43)
+    el.querySelectorAll('[data-placas-liberar]').forEach((b) => b.addEventListener('click', async () => {
+      const f = fazPor(b.dataset.placasLiberar);
+      if (!(await confirmar({ titulo: `Liberar as placas com QR code para ${f.nome}?`, texto: 'O dono passa a ver Fazenda › Visitantes › Placas com QR code e pode imprimir as placas dos tanques. Libere depois que o cliente contratar o serviço.', ok: 'Liberar placas' }))) return;
+      acao(() => ctx.api.adminLiberarPlacas(f.id, true), 'Placas liberadas');
+    }));
+    el.querySelectorAll('[data-placas-retirar]').forEach((b) => b.addEventListener('click', async () => {
+      const f = fazPor(b.dataset.placasRetirar);
+      if (!(await confirmar({ titulo: `Retirar as placas de ${f.nome}?`, texto: 'As placas já impressas param de mostrar os dados (o visitante vê "indisponível"). Dá para liberar de novo depois, com os mesmos códigos.', ok: 'Retirar placas', perigo: true }))) return;
+      acao(() => ctx.api.adminLiberarPlacas(f.id, false), 'Placas retiradas');
     }));
     el.querySelectorAll('[data-liberar]').forEach((b) => b.addEventListener('click', async () => {
       const f = fazPor(b.dataset.liberar);

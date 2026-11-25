@@ -21,6 +21,7 @@ export function renderMais(ctx, el) {
       gerir && ['#/pedidos', 'historico', 'Pedidos de correção', 'Aprovar ou recusar o que a equipe pediu para corrigir'],
       ['#/pendencias', 'pendentes', 'Pendentes de envio', state.pendentes ? `${state.pendentes} aguardando envio` : 'Nada pendente'],
     ]],
+    ['Visitantes', [dono && ['#/placas', 'qr', 'Placas com QR code', 'Página de cada tanque para escolas e visitantes']]],
     ['Pessoas', [dono && ['#/equipe', 'equipe', 'Equipe', 'Pessoas, papéis e tanques liberados']]],
     ['Plano', [dono && ['#/plano', 'check', 'Meu plano', 'Pacote de tanques e prazo']]],
     ['Segurança', [dono && ['#/historico', 'historico', 'Histórico e lixeira', 'Quem alterou ou excluiu, e restaurar']]],

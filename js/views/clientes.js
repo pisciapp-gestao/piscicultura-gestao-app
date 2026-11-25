@@ -51,10 +51,11 @@ export async function renderClientes(ctx, el, estado = { busca: '' }) {
   el.innerHTML = '<h1>Fazendas dos clientes</h1><p class="carregando">Carregando…</p>';
   if (!navigator.onLine) { el.innerHTML = '<h1>Fazendas dos clientes</h1><div class="card vazio">Precisa de internet.</div>'; return; }
   const rota = location.hash;
-  let fazendas = [], cobrancas = [], acomp = null, quando = null;
+  let fazendas = [], cobrancas = [], acomp = null, quando = null, placasLib = null;
 
   async function carregar() {
-    const [fz, cb, ac] = await Promise.all([ctx.api.adminFazendas(), ctx.api.adminCobrancas().catch(() => []), ctx.api.adminAcompanhamento()]);
+    const [fz, cb, ac, pl] = await Promise.all([ctx.api.adminFazendas(), ctx.api.adminCobrancas().catch(() => []), ctx.api.adminAcompanhamento(), ctx.api.adminPlacasLiberadas ? ctx.api.adminPlacasLiberadas().catch(() => null) : null]);
+    placasLib = pl;
     fazendas = fz; cobrancas = (cb || []).filter((c) => c.status === 'pendente'); acomp = comBiomassaHoje(ac); quando = new Date();
   }
   // biomassa de HOJE de cada fazenda: mesma conta das telas do cliente (última biometria + ração dada depois dela)
@@ -86,7 +87,7 @@ export async function renderClientes(ctx, el, estado = { busca: '' }) {
     return `<article class="card cli-card${f.id === aqui ? ' cli-aqui' : ''}" data-faz="${esc(f.id)}">
       <header class="cli-cab">
         <div class="esq"><h2>${esc(f.nome)}</h2><small>${esc(f.dono_nome || 'sem dono')}${f.dono_email ? ` · ${esc(f.dono_email)}` : ''}</small></div>
-        <span class="tag ${s.classe}">${esc(s.rotulo)}${!f.bloqueada && p.valido_ate ? ` até ${fmtData(p.valido_ate)}` : ''}</span>
+        <span class="cli-tags"><span class="tag ${s.classe}">${esc(s.rotulo)}${!f.bloqueada && p.valido_ate ? ` até ${fmtData(p.valido_ate)}` : ''}</span>${placasLib && placasLib.has(f.id) ? '<span class="tag ok">Placas QR</span>' : ''}</span>
       </header>
       ${av.length ? `<div class="cli-avisos">${av.map(([c, t]) => `<span class="cli-aviso ${c}">${t}</span>`).join('')}</div>` : ''}
       ${a ? `<div class="cli-nums">
