@@ -64,6 +64,19 @@ checa(x.ultima_atividade != null, 'última atividade preenchida');
 const zr = (await como(A, `select * from admin_acompanhamento() where fazenda_id = '${Z}'`)).rows[0];
 checa(zr && Number(zr.lotes_ativos) === 0 && Number(zr.peixes_vivos) === 0 && zr.biomassa_kg == null && zr.ultima_atividade == null, 'fazenda sem nada: zeros e vazios, sem erro');
 
+checa(Array.isArray(x.lotes) && x.lotes.length === 2, 'dados por lote ativo para a conta do peso de hoje');
+const l1 = (x.lotes || []).find((l) => Number(l.quantidade_inicial) === 5000) || {};
+checa(Number(l1.racao_ate_bio_kg) === 999 + 80 && Number(l1.racao_desde_bio_kg) === 100 + 90, `lote pesado há 5 dias: ração até a biometria 1.079 e depois 190: ${l1.racao_ate_bio_kg} / ${l1.racao_desde_bio_kg}`);
+// resumo_lotes (o que o app do cliente usa): colunas antigas iguais + as novas, e só os lotes da fazenda dele
+let rl = await como(C, `select * from resumo_lotes() order by racao_kg desc`);
+checa(!rl.erro && rl.rows.length === 3, 'dono vê o resumo dos 3 lotes da fazenda dele' + (rl.erro ? ': ' + rl.erro : ''));
+const r1 = rl.rows[0] || {};
+checa(Number(r1.racao_kg) === 1269 && Number(r1.mortos) === 100 && Math.abs(Number(r1.ultimo_peso_medio_kg) - 0.8) < 1e-9 && Number(r1.despescados) === 400, 'colunas antigas do resumo continuam iguais');
+checa(Number(r1.racao_ate_bio_kg) + Number(r1.racao_desde_bio_kg) === Number(r1.racao_kg) && Number(r1.racao_desde_bio_kg) === 190, 'ração até + depois da biometria = ração total');
+const r2 = rl.rows.find((x) => x.ultima_biometria == null && Number(x.racao_kg) === 25);
+checa(r2 && Number(r2.racao_ate_bio_kg) === 0 && Number(r2.racao_desde_bio_kg) === 25 && r2.primeira_racao != null, 'lote sem biometria: toda a ração conta como "depois"');
+checa((await como(A, `select count(*)::int c from resumo_lotes()`)).rows[0].c === 0, 'administrador fora do suporte não vê o resumo dos lotes do cliente');
+
 r = await como(C, `select * from admin_acompanhamento()`);
 checa(/administradores/.test(r.erro || ''), 'dono de fazenda (não administrador) é barrado');
 r = await como(F2, `select * from admin_acompanhamento()`);

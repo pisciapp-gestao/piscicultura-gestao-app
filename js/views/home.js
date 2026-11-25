@@ -1,6 +1,6 @@
 import { esc, fmtInt, fmtNum, fmtData, hojeISO, diasEntre, num, ROTULO_TIPO, ROTULO_PAPEL, progresso, fmtPct } from '../util.js';
 import * as db from '../db.js';
-import { situacaoEstoque, previsaoDespesca, alertasManejo, vivosDoLote } from '../calc.js';
+import { situacaoEstoque, previsaoDespesca, alertasManejo, vivosDoLote, pesoHoje } from '../calc.js';
 import { ESTOQUE_ATENCAO_DIAS, ESTOQUE_CRITICO_DIAS, ESTOQUE_COBERTURA_DIAS, CONTAGEM_LEMBRETE_DIAS, PLANO_AVISO_DIAS, ALERTAS } from '../config.js';
 import { icone } from '../icons.js';
 import { pedirTexto } from '../dialogo.js';
@@ -159,7 +159,7 @@ export async function renderHome(ctx, el) {
       for (const l of lotes) {
         const r = resumo[l.id];
         const v = vivosDoLote(l, r);
-        const pm = r && r.ultimo_peso_medio_kg != null ? Number(r.ultimo_peso_medio_kg) : Number(l.peso_inicial_kg) / Math.max(1, Number(l.quantidade_inicial));
+        const pm = pesoHoje(l, r, hojeISO()).kg; // peso de hoje: última biometria + ração dada depois dela (tambaqui)
         peixes += v; kg += v * (pm || 0);
       }
       ns.push(`<div class="num"><span>Peixe na água</span><b>${kg >= 1000 ? fmtNum(kg / 1000, 1) : fmtNum(kg, 0)}<small> ${kg >= 1000 ? 't' : 'kg'}</small></b><small>${fmtInt(peixes)} peixes vivos</small></div>`);
@@ -220,7 +220,7 @@ export async function renderHome(ctx, el) {
     for (const l of lotes) {
       const r = resumo[l.id];
       const vivos = vivosDoLote(l, r);
-      const pm = r && r.ultimo_peso_medio_kg != null ? Number(r.ultimo_peso_medio_kg) : Number(l.peso_inicial_kg) / Math.max(1, Number(l.quantidade_inicial));
+      const pm = pesoHoje(l, r, hojeISO()).kg;
       const b = vivos * (pm || 0);
       peixes += vivos; kg += b; porT[l.tanque_id] = (porT[l.tanque_id] || 0) + b;
       porFase[l.tipo] = (porFase[l.tipo] || 0) + b;

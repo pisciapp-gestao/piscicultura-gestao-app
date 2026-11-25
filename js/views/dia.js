@@ -55,6 +55,17 @@ export async function dadosDoDia(ctx, { mortes: comMortes = false, saldos: comSa
   const numerosGuardados = !semDetalhe && (!navigator.onLine || !!ctx.state.semRede);
 
   const fila = await db.filaList().catch(() => []);
+  // peso de hoje (sql/42): a ração lançada neste aparelho e ainda não enviada já faz o peso subir (lançou sem sinal)
+  for (const i of fila) {
+    if (i.tabela !== 'racao_consumo' || !i.payload) continue;
+    const r = resumo[i.payload.lote_id];
+    if (!r || r.racao_desde_bio_kg == null) continue;
+    const kg = Number(i.payload.quantidade_kg) || 0, copia = { ...r };
+    copia.racao_kg = (Number(r.racao_kg) || 0) + kg;
+    if (!r.ultima_biometria || i.payload.data > r.ultima_biometria) copia.racao_desde_bio_kg = (Number(r.racao_desde_bio_kg) || 0) + kg;
+    else copia.racao_ate_bio_kg = (Number(r.racao_ate_bio_kg) || 0) + kg;
+    resumo[i.payload.lote_id] = copia;
+  }
   const pendHoje = fila.filter((i) => i.tabela === 'racao_consumo' && i.payload.data === hoje);
   const racaoHojeLocal = new Set(pendHoje.map((i) => i.payload.tanque_id));
   // água medida neste aparelho e ainda não enviada também conta

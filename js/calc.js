@@ -121,7 +121,8 @@ export function calcularLote(lote, bios, mort, rac, hoje, precoKg = null, desp =
       const baseData = ultima ? ultima.data : andamento ? null : lote.data_entrada;
       const pmBase = ultima ? pmAtual : pmInicial;
       if (!baseData || !(pmBase > 0) || !(baseData < hoje)) return null;
-      const racaoDesde = soma(rac.filter((r) => r.data > baseData && r.data <= hoje), 'quantidade_kg');
+      // depois da biometria: a partir do dia seguinte; sem biometria: desde o dia da entrada (a ração desse dia já foi para os peixes)
+      const racaoDesde = soma(rac.filter((r) => (ultima ? r.data > baseData : r.data >= baseData) && r.data <= hoje), 'quantidade_kg');
       // quanto este lote gasta em relação à tabela (mesma regra da previsão de ração até vender)
       // lote cadastrado em andamento: compara a partir da pesagem que marcou o início no app
       let fator = null;
@@ -132,12 +133,7 @@ export function calcularLote(lote, bios, mort, rac, hoje, precoKg = null, desp =
         const esperado = racaoTabelaPorPeixe(pmDe, pmAtual) * peixesMedia;
         if (esperado > 0) fator = Math.min(2, Math.max(0.7, racaoMedida / esperado));
       }
-      const pm = pesoPelaRacao(pmBase, racaoDesde, vivos, fator);
-      // crescer mais que o dobro do que a tabela prevê nesses dias não acontece: é ração lançada a mais (1.000 sacos em vez de 10)
-      const maxKg = pmBase + 2 * (pesoTabelaApos(pmBase, diasEntre(baseData, hoje)) - pmBase) + 0.005;
-      if (pm != null && pm <= maxKg) return { pm, baseData, racaoDesde, fator };
-      // havia ração, peixe e peso, mas a ração não cabe em peixe nenhum: lançamento errado (ex.: 1.000 sacos em vez de 10)
-      return racaoDesde > 0 && vivos > 0 ? { pm: null, impossivel: true, baseData, racaoDesde } : null;
+      return estimarPeso({ pmBase, baseData, racaoDesde, vivos, fator, hoje });
     })()
     : null;
 
@@ -535,6 +531,46 @@ export function racaoTabelaPorPeixe(pmIniKg, pmFimKg, tabela = TABELA_ALIMENTAR)
   const ult = tabela[tabela.length - 1];
   if (b > ult[2]) kg += (ult[6] / TABELA_PEIXES / (ult[2] - ult[1])) * (b - Math.max(a, ult[2]));
   return kg;
+}
+
+// Núcleo da estimativa do peso de hoje (o mesmo em todas as telas): parte do peso da base (última biometria ou entrada)
+// e soma a ração dada depois dela, pela tabela, corrigida pelo fator do lote. Retorna { pm, baseData, racaoDesde, fator },
+// { pm: null, impossivel: true, ... } quando a ração não cabe nos peixes (lançada a mais), ou null (nada para estimar).
+export function estimarPeso({ pmBase, baseData, racaoDesde, vivos, fator = null, hoje }) {
+  if (!(pmBase > 0) || !baseData || !(baseData < hoje) || !(racaoDesde > 0) || !(vivos > 0)) return null;
+  const pm = pesoPelaRacao(pmBase, racaoDesde, vivos, fator);
+  // crescer mais que o triplo do que a tabela prevê nesses dias não acontece: é ração lançada a mais (1.000 sacos em vez de 10).
+  // Triplo (não dobro): fazenda que trata acima da tabela antes da 2ª biometria não leva aviso à toa.
+  const maxKg = pmBase + 3 * (pesoTabelaApos(pmBase, diasEntre(baseData, hoje)) - pmBase) + 0.005;
+  if (pm != null && pm <= maxKg) return { pm, baseData, racaoDesde, fator };
+  return { pm: null, impossivel: true, baseData, racaoDesde };
+}
+
+// Peso médio de HOJE de um lote a partir da linha do resumo_lotes (sql/42: racao_desde_bio_kg, racao_ate_bio_kg, primeira_racao).
+// Tambaqui de lote ativo: estimado pela ração dada depois da última biometria (mesma conta do relatório do lote).
+// Senão (ou sem as colunas do sql/42): o peso da última biometria; sem biometria, o da entrada (semEntrada: null).
+// Retorna { kg, kgBio, estimado, desde, impossivel, racaoDesde }.
+export function pesoHoje(lote, r, hoje, { semEntrada = false } = {}) {
+  const qi = Number(lote && lote.quantidade_inicial) || 0;
+  const pmIni = qi > 0 ? Number(lote.peso_inicial_kg) / qi : null;
+  const kgBio = r && r.ultimo_peso_medio_kg != null ? Number(r.ultimo_peso_medio_kg) : null;
+  const base = kgBio ?? (semEntrada ? null : pmIni);
+  const sem = { kg: base, kgBio, estimado: false, desde: null, impossivel: false, racaoDesde: null };
+  if (!lote || lote.ativo === false || !ehTambaqui(lote.especie) || !r || r.racao_desde_bio_kg == null) return sem;
+  const andamento = !!(r.primeira_racao && diasEntre(lote.data_entrada, r.primeira_racao) > 7);
+  const baseData = r.ultima_biometria || (andamento ? null : lote.data_entrada);
+  const pmBase = r.ultima_biometria ? kgBio : pmIni;
+  const vivos = vivosDoLote(lote, r);
+  let fator = null;
+  const ate = Number(r.racao_ate_bio_kg) || 0;
+  if (r.ultima_biometria && !andamento && pmIni > 0 && kgBio > pmIni * 1.2 && ate > 0) {
+    const esperado = racaoTabelaPorPeixe(pmIni, kgBio) * ((qi + vivos) / 2);
+    if (esperado > 0) fator = Math.min(2, Math.max(0.7, ate / esperado));
+  }
+  const e = estimarPeso({ pmBase, baseData, racaoDesde: Number(r.racao_desde_bio_kg) || 0, vivos, fator, hoje });
+  if (!e) return sem;
+  if (e.impossivel) return { ...sem, impossivel: true, desde: e.baseData, racaoDesde: e.racaoDesde };
+  return { kg: e.pm, kgBio, estimado: true, desde: e.baseData, impossivel: false, racaoDesde: e.racaoDesde };
 }
 
 // Peso médio (kg) que a tabela de alimentação prevê depois de "dias" partindo de pmKg (cada linha da tabela é uma semana;

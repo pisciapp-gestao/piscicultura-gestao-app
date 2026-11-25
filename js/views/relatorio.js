@@ -9,7 +9,7 @@ import { confirmar, formulario } from '../dialogo.js';
 import { icone } from '../icons.js';
 import { esc, fmtData, fmtNum, fmtInt, fmtBRL, hojeISO, num, ROTULO_TIPO, faseCss, nomeArquivo, dataArquivo, progresso, fmtPct, numDecimal, numMoeda, moedaCampo, pesoMedioTxt, celulaCsv } from '../util.js';
 import { pizza, COR_FASE, ORDEM_FASE } from '../graficos.js';
-import { calcularNaIdade, fimDoLote, mediaDe, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui } from '../calc.js';
+import { calcularNaIdade, fimDoLote, mediaDe, vivosDoLote, indicadoresDespesca, avisoPesoMedio, avaliarAgua, ehTambaqui, pesoHoje } from '../calc.js';
 import { calcularLote, precoMedioKg, precoRacaoDoLote, pontosPeso, pesoMedioKg, evolucaoPeso, racaoPorSemana, matrizRacao, situacaoEstoque, previsaoRacao } from '../calc.js';
 import { metaDe, metasDe, htmlPrevRacao, PROXIMA_FASE } from './despesca.js';
 
@@ -655,7 +655,8 @@ export async function renderRacaoDia(ctx, el) {
       const r0 = resumo[l.id];
       const v = vivosDoLote(l, r0);
       vivos += v;
-      if (r0 && r0.ultimo_peso_medio_kg != null) bio += v * Number(r0.ultimo_peso_medio_kg); else temPeso = false;
+      const ph = pesoHoje(l, r0, hojeISO(), { semEntrada: true }); // peso de hoje (biometria + ração depois dela)
+      if (ph.kg != null) bio += v * ph.kg; else temPeso = false;
     }
     return { lote, vivos, biomassaKg: temPeso && bio > 0 ? bio : null, fase: ls.every((l) => l.tipo === ls[0].tipo) ? ls[0].tipo : null };
   };

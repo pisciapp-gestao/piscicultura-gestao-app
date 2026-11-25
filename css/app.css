@@ -1573,3 +1573,4 @@ details.fechando[open] > summary::after { transform: rotate(45deg) translateY(-2
 .cli-num small { display: block; font-size: .72rem; color: var(--tinta-2); overflow-wrap: anywhere; }
 .cli-pe { margin: 0; font-size: .82rem; }
 .cli-acoes { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.erro-txt { color: var(--erro-tinta); }

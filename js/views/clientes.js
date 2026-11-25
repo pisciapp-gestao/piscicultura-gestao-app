@@ -4,6 +4,7 @@
 import { icone } from '../icons.js';
 import { esc, fmtData, fmtBRL, fmtInt, fmtNum, plural, hojeISO } from '../util.js';
 import { pedirEntrarSuporte, situacaoFazenda } from './admin.js';
+import { pesoHoje, vivosDoLote } from '../calc.js';
 
 const ATUALIZA_MS = 60000;
 const KG_SACO = 25;
@@ -33,6 +34,7 @@ export function avisosCliente(f, a, cobranca) {
     const est = Number(a.estoque_kg), porDia = Number(a.racao_7d_kg) / 7;
     if (Number(a.lotes_ativos) > 0 && est < 0) out.push(['erro', 'Estoque de ração negativo (falta lançar compra)']);
     else if (porDia > 0 && est / porDia < 7) out.push(['alerta', `Ração para ${plural(Math.max(0, Math.floor(est / porDia)), 'dia', 'dias')}`]);
+    if (a.racao_conferir) out.push(['alerta', `Ração lançada a mais em ${plural(a.racao_conferir, 'lote', 'lotes')} (conferir)`]);
     const parada = Number(a.lotes_ativos) > 0 && (!a.ultima_atividade || Date.now() - Date.parse(a.ultima_atividade) > 3 * 864e5);
     if (parada && !f.bloqueada) out.push(['alerta', a.ultima_atividade ? `Parada há ${plural(Math.floor((Date.now() - Date.parse(a.ultima_atividade)) / 864e5), 'dia', 'dias')}` : 'Nunca lançou']);
     if (Number(a.mortos_7d) > 0 && Number(a.peixes_vivos) > 0 && Number(a.mortos_7d) / (Number(a.peixes_vivos) + Number(a.mortos_7d)) >= 0.02) out.push(['alerta', `${fmtInt(a.mortos_7d)} mortes na semana`]);
@@ -53,7 +55,23 @@ export async function renderClientes(ctx, el, estado = { busca: '' }) {
 
   async function carregar() {
     const [fz, cb, ac] = await Promise.all([ctx.api.adminFazendas(), ctx.api.adminCobrancas().catch(() => []), ctx.api.adminAcompanhamento()]);
-    fazendas = fz; cobrancas = (cb || []).filter((c) => c.status === 'pendente'); acomp = ac; quando = new Date();
+    fazendas = fz; cobrancas = (cb || []).filter((c) => c.status === 'pendente'); acomp = comBiomassaHoje(ac); quando = new Date();
+  }
+  // biomassa de HOJE de cada fazenda: mesma conta das telas do cliente (última biometria + ração dada depois dela)
+  function comBiomassaHoje(lista) {
+    const hoje = hojeISO();
+    for (const a of lista || []) {
+      if (!Array.isArray(a.lotes)) continue;
+      let kg = 0, comPeso = 0, estimados = 0, conferir = 0;
+      for (const l of a.lotes) {
+        const ph = pesoHoje({ ...l, ativo: true }, l, hoje, { semEntrada: true });
+        if (ph.impossivel) conferir++;
+        if (ph.kg == null) continue;
+        kg += vivosDoLote(l, l) * ph.kg; comPeso++; if (ph.estimado) estimados++;
+      }
+      a.biomassa_kg = comPeso ? kg : null; a.biomassa_estimada = estimados > 0; a.racao_conferir = conferir;
+    }
+    return lista;
   }
   const dados = (f) => (acomp ? acomp.find((a) => a.fazenda_id === f.id) : null);
   const emSuporte = ctx.emSuporte && ctx.emSuporte();
@@ -73,7 +91,7 @@ export async function renderClientes(ctx, el, estado = { busca: '' }) {
       ${av.length ? `<div class="cli-avisos">${av.map(([c, t]) => `<span class="cli-aviso ${c}">${t}</span>`).join('')}</div>` : ''}
       ${a ? `<div class="cli-nums">
         ${num('Peixes na água', fmtInt(a.peixes_vivos), plural(Number(a.lotes_ativos), 'lote ativo', 'lotes ativos'))}
-        ${num('Biomassa', a.biomassa_kg != null ? kgOuT(Number(a.biomassa_kg)) : '—', Number(a.lotes_sem_biometria) ? `${plural(Number(a.lotes_sem_biometria), 'lote', 'lotes')} sem biometria` : 'pela última biometria')}
+        ${num('Biomassa hoje', a.biomassa_kg != null ? `${a.biomassa_estimada ? '≈ ' : ''}${kgOuT(Number(a.biomassa_kg))}` : '—', Number(a.lotes_sem_biometria) ? `${plural(Number(a.lotes_sem_biometria), 'lote', 'lotes')} sem biometria` : a.biomassa_estimada ? 'biometria + ração dada depois' : 'pela última biometria')}
         ${num('Ração hoje', `${fmtNum(Number(a.racao_hoje_kg) / KG_SACO, 1)} sc`, `semana: ${fmtNum(Number(a.racao_7d_kg) / 7 / KG_SACO, 1)} sc/dia`)}
         ${num('Estoque', `${fmtNum(Number(a.estoque_kg) / KG_SACO, 0)} sc`, `${fmtNum(Number(a.estoque_kg), 0)} kg`)}
         ${num('Mortes (7 dias)', fmtInt(a.mortos_7d))}

@@ -4,7 +4,7 @@ import { icone } from '../icons.js';
 import { ESPECIES } from '../config.js';
 import { esc, fmtData, fmtInt, fmtNum, hojeISO, num, ROTULO_TIPO, FASES, areaHa, progresso, fmtPct, plural } from '../util.js';
 import { lerPlanilha } from '../planilha.js';
-import { vivosDoLote } from '../calc.js';
+import { vivosDoLote, pesoHoje } from '../calc.js';
 import * as db from '../db.js';
 import { ordemNatural } from './home.js';
 
@@ -166,7 +166,7 @@ export async function renderTanque(ctx, el, id, params = {}) {
     iniciais += Number(l.quantidade_inicial) || 0;
     const r = resumo[l.id];
     const v = vivosDoLote(l, r);
-    const pm = r && r.ultimo_peso_medio_kg != null ? Number(r.ultimo_peso_medio_kg) : Number(l.peso_inicial_kg) / Math.max(1, Number(l.quantidade_inicial));
+    const pm = pesoHoje(l, r, hojeISO()).kg;
     vivos += v; biomassa += v * (pm || 0);
   }
   const area = Number(tanque.area_ha) || 0;
