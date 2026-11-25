@@ -142,7 +142,7 @@ with sync_playwright() as pw:
     def app(papel, banco=None, offline_inicio=False):
         erros, chamadas = [], []
         banco = banco if banco is not None else {}
-        st = {'placas': {}, 'whats': None, 'falhar': False}
+        st = {'placas': {}, 'whats': None, 'falhar': False, 'lib': True}
         perfil = {'id': U, 'nome': 'Zé', 'papel': papel, 'fazenda_id': F, 'ativo': True, 'fazendas': {'nome': 'Fazenda Sol'}}
         ctx = b.new_context(viewport={'width': 390, 'height': 844}, timezone_id='America/Boa_Vista', reduced_motion='reduce', permissions=['clipboard-read', 'clipboard-write'])
         pg = ctx.new_page(); pg.on('pageerror', lambda e: erros.append(str(e)))
@@ -176,6 +176,7 @@ with sync_playwright() as pw:
             if tab == 'usuario_tanques': return j([{'usuario_id': U, 'tanque_id': T}, {'usuario_id': U, 'tanque_id': T2}])
             if tab == 'placas': return j(list(st['placas'].values()))
             if tab == 'fazendas':
+                if 'placas_liberadas' in u: return j({'placas_liberadas': st['lib']} if obj else [{'placas_liberadas': st['lib']}])
                 if 'whatsapp_visitantes' in u: return j({'whatsapp_visitantes': st['whats']} if obj else [{'whatsapp_visitantes': st['whats']}])
                 return j({'kg_saco': 25} if obj else [{'kg_saco': 25}])
             if tab in ('racao_consumo', 'qualidade_agua') and req.method == 'GET': return j(list(banco.get(tab, {}).values()) if not obj else None)
@@ -237,6 +238,22 @@ with sync_playwright() as pw:
         pg.goto(BASE + '#/placas'); pg.wait_for_timeout(800)
         checa(sem and 'Só o dono' in pg.inner_text('#view') and not any(c[0].startswith('placa') for c in chamadas), f'{papel}: sem entrada de placas e sem acesso pelo endereço')
         ctx.close()
+
+    # ---------------- 2b) serviço à parte: sem liberação do administrador ----------------
+    for larg in (390, 1366):
+        ctx2, pg2, erros2, chamadas2, st2 = app('dono'); st2['lib'] = False
+        pg2.set_viewport_size({'width': larg, 'height': 900})
+        pg2.goto(BASE + '#/mais'); pg2.wait_for_selector('#view', state='attached', timeout=20000); pg2.wait_for_timeout(600)
+        checa(pg2.locator('a.item[href="#/placas"]').count() >= 1, f'{larg}px: sem liberação, o dono ainda vê a entrada (conhece o serviço)')
+        pg2.goto(BASE + '#/placas'); pg2.wait_for_timeout(1500)
+        t2 = pg2.inner_text('#view')
+        checa('Serviço à parte' in t2 and 'Fale com o suporte' in t2 and '#f-whats' not in pg2.content() and pg2.locator('a.item[href^="#/placa/"]').count() == 0, f'{larg}px: sem liberação: explica que é serviço à parte, sem lista nem formulário')
+        pg2.goto(BASE + f'#/placa/{T}'); pg2.wait_for_timeout(1500)
+        checa('Serviço à parte' in pg2.inner_text('#view') and not any(c[0] == 'placa_salvar' for c in chamadas2), f'{larg}px: pelo endereço direto também não cria placa')
+        checa(pg2.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), f'{larg}px: sem rolar para os lados')
+        if larg == 390: pg2.screenshot(path='placa_servico_a_parte.png', full_page=True)
+        checa(not erros2, f'{larg}px: sem erro de JavaScript {erros2[:2]}')
+        ctx2.close()
 
     # ---------------- 3) sem sinal → volta → aparece no app E na placa ----------------
     banco = {}

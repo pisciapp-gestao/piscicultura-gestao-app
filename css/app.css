@@ -1614,3 +1614,7 @@ body[data-pagina="placa"] #root > .carregando { margin: 1rem; }
 .folha .f-peq { font-size: .72rem; color: var(--tinta-2); }
 .placa-acoes #b-trocar { width: 100%; margin-top: .55rem; }
 .placa-acoes .nota { margin: .9rem 0 0; }
+
+.placa-oferta p { margin: 0 0 .7rem; }
+.placa-oferta p:last-child { margin-bottom: 0; }
+.cli-tags { display: flex; flex-direction: column; align-items: flex-end; gap: .3rem; }

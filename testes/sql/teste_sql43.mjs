@@ -41,6 +41,23 @@ await db.query(`insert into racao_consumo (uuid_local, lote_id, tanque_id, data,
 await db.query(`insert into qualidade_agua (uuid_local, tanque_id, data, hora, oxigenio_mgl, temperatura_c, ph, amonia_mgl, registrado_por) values
   ('${g(6)}', '${T3}', '${d1}', '06:10', 5.6, 29.1, 6.4, 0.12, '${F}')`);
 
+// ---------- serviço à parte: só funciona na fazenda liberada pelo administrador ----------
+const ADM = '00000000-0000-4000-8000-0000000000c9';
+await db.exec(`insert into auth.users values ('${ADM}','adm@x'); insert into administradores (usuario_id) values ('${ADM}');`);
+let r0 = await como(R, `select codigo from placa_salvar('${T3}', true, true, true, true, false)`);
+checa(/serviço à parte/.test(r0.erro || ''), 'sem liberação: o dono não cria placa (serviço à parte)');
+r0 = await como(R, `select placa_salvar_whatsapp('95991442495')`);
+checa(/serviço à parte/.test(r0.erro || ''), 'sem liberação: nem o WhatsApp dos visitantes');
+r0 = await como(R, `update fazendas set placas_liberadas = true where id = '${FZ}'`);
+checa(!!r0.erro && !(await q1(`select placas_liberadas l from fazendas where id = '${FZ}'`)).l, 'o dono não consegue se liberar mexendo direto na tabela');
+r0 = await como(R, `select admin_liberar_placas('${FZ}', true)`);
+checa(/administradores/.test(r0.erro || ''), 'o dono não chama a liberação do administrador');
+checa(um(await como(R, `select placas_liberadas from fazendas where id = '${FZ}'`)) === false, 'o dono lê se a fazenda tem as placas liberadas');
+r0 = await como(ADM, `select admin_liberar_placas('${FZ}', true)`);
+checa(!r0.erro && (await q1(`select placas_liberadas l from fazendas where id = '${FZ}'`)).l === true, 'o administrador libera as placas da fazenda' + (r0.erro ? ': ' + r0.erro : ''));
+checa((await q1(`select count(*)::int c from admin_acoes where acao = 'liberou as placas com QR code' and fazenda_id = '${FZ}'`)).c === 1, 'a liberação fica no registro de ações do administrador');
+checa((await como(ADM, `select * from admin_placas_liberadas()`)).rows.length === 1 && !!(await como(R, `select * from admin_placas_liberadas()`)).erro, 'só o administrador lista as fazendas liberadas');
+
 // ---------- quem cuida das placas ----------
 let r = await como(F, `select codigo from placa_salvar('${T3}', true, true, true, true, false)`);
 checa(/Apenas o dono/.test(r.erro || ''), 'funcionário não cria placa');
@@ -66,7 +83,7 @@ checa(!!r.erro, 'nem o dono grava direto na tabela (só pelas funções)');
 // ---------- outra fazenda e visitante ----------
 const outra = um(await como(X, `select criar_fazenda('Outra', 'Xavier', '529.982.247-25')`));
 r = await como(X, `select * from placa_salvar('${T3}', false, null, null, null, null)`);
-checa(/não encontrado/.test(r.erro || ''), 'dono de outra fazenda não mexe na placa do Tanque 3');
+checa(/não encontrado|serviço à parte/.test(r.erro || ''), 'dono de outra fazenda não mexe na placa do Tanque 3 (nem tem as placas liberadas)');
 r = await como(X, `select placa_trocar_codigo('${T3}')`);
 checa(!!r.erro, 'dono de outra fazenda não troca o código do Tanque 3');
 checa((await como(X, `select * from placas`)).rows.length === 0, 'dono de outra fazenda não lê as placas');
@@ -153,5 +170,16 @@ for (const fn of ['placa_salvar(uuid, boolean, boolean, boolean, boolean, boolea
 checa(!(await pode('authenticated', 'placa_novo_codigo()')), 'ninguém chama placa_novo_codigo direto');
 checa(!(await q1(`select has_table_privilege('anon', 'placas', 'select') v`)).v, 'visitante sem permissão na tabela placas');
 
+// ---------- retirar a liberação: a placa impressa para de mostrar os dados ----------
+{
+  const cod = (await q1(`select codigo from placas where tanque_id = '${T3}'`)).codigo;
+  const ligadaAntes = (await q1(`select ligada from placas where tanque_id = '${T3}'`)).ligada;
+  if (!ligadaAntes) await como(R, `select placa_salvar('${T3}', true, null, null, null, null)`);
+  checa((await como(null, `select placa_publica('${cod}') j`)).rows[0].j.disponivel === true, 'liberada e ligada: o visitante vê os dados');
+  await como(ADM, `select admin_liberar_placas('${FZ}', false)`);
+  const j = (await como(null, `select placa_publica('${cod}') j`)).rows[0].j;
+  checa(j.disponivel === false && j.lotes === undefined, 'liberação retirada: a página do visitante fica indisponível, sem dados');
+  checa(/serviço à parte/.test((await como(R, `select placa_trocar_codigo('${T3}')`)).erro || ''), 'liberação retirada: o dono não mexe mais nas placas');
+}
 console.log(ok ? '\nRESULTADO: TUDO OK (sql/43 placas com QR code)' : '\nRESULTADO: HÁ FALHAS');
 process.exit(ok ? 0 : 1);

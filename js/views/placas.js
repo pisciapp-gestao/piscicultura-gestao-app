@@ -9,6 +9,19 @@ import { carregarGerador, carregarFontes, abrirVisualizador } from '../pdf_ui.js
 const faltaSql = (e) => /placa|whatsapp_visitantes/i.test((e && e.message) || '') && /exist|schema|column|relation|function|could not find/i.test((e && e.message) || '');
 const erroSql = (e) => (faltaSql(e) ? new Error('Falta rodar o sql/43 (placas com QR code) no Supabase.') : e);
 
+// serviço à parte (25/11/2026): sem liberação do administrador, explica e não mostra as placas
+async function naoLiberada(ctx, el) {
+  if (await ctx.api.placasLiberadas().catch(() => false)) return false;
+  el.innerHTML = `<h1>Placas com QR code</h1>
+    <p class="sub-titulo">Serviço à parte</p>
+    <div class="card placa-oferta">
+      <p><b>Uma placa na beira de cada tanque.</b> Quem aponta o celular vê na hora como estão os peixes: água, crescimento e se já comeram hoje. Ideal para visitas de escolas, compradores e técnicos.</p>
+      <p class="mudo">Nunca aparecem valores em R$, quantidade de peixes, mortes nem nomes da equipe.</p>
+      <p>As placas com QR code são contratadas à parte. <b>Fale com o suporte do PisciApp</b> para liberar na sua fazenda.</p>
+    </div>`;
+  return true;
+}
+
 function soDono(ctx, el) {
   if (ctx.state.perfil.papel === 'dono') return false;
   el.innerHTML = '<h1>Placas com QR code</h1><div class="card vazio"><p>Só o dono da fazenda cuida das placas com QR code.</p></div>';
@@ -31,6 +44,7 @@ const fmtWhats = (n) => {
 
 export async function renderPlacas(ctx, el) {
   if (soDono(ctx, el)) return;
+  if (await naoLiberada(ctx, el)) return;
   el.innerHTML = '<h1>Placas com QR code</h1><p class="sub-titulo">Carregando…</p>';
   let tanques, placas, whats;
   try { [tanques, placas, whats] = await Promise.all([ctx.api.tanques(), ctx.api.placas(), ctx.api.whatsappVisitantes()]); }
@@ -70,6 +84,7 @@ export async function renderPlacas(ctx, el) {
 
 export async function renderPlaca(ctx, el, tanqueId) {
   if (soDono(ctx, el)) return;
+  if (await naoLiberada(ctx, el)) return;
   el.innerHTML = '<h1>Placa</h1><p class="sub-titulo">Carregando…</p>';
   let tanques, placas, whats;
   try { [tanques, placas, whats] = await Promise.all([ctx.api.tanques(), ctx.api.placas(), ctx.api.whatsappVisitantes()]); }

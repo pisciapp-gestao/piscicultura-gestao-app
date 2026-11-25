@@ -11,7 +11,50 @@
 --    nome da fazenda e do tanque, espécie, fase, dias de cultivo, peso médio das pesagens,
 --    última medição da água e se a ração de hoje já foi dada;
 --  * NUNCA saem: valores em R$, quantidade de peixes, biomassa, mortes, despescas, nomes da equipe.
+--  * SERVIÇO À PARTE (25/11/2026): só funciona na fazenda que o administrador do sistema liberou
+--    (fazendas.placas_liberadas). Sem liberação o dono não cria/liga placa e a página pública diz "indisponível".
 -- ============================================================
+
+-- liberação das placas por fazenda (só o administrador do sistema muda; o dono só lê)
+alter table fazendas add column if not exists placas_liberadas boolean not null default false;
+grant select (placas_liberadas) on fazendas to authenticated;
+create or replace function fazendas_placas_so_admin() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.placas_liberadas is distinct from old.placas_liberadas and not eh_admin() then
+    raise exception 'Só o administrador do sistema libera as placas com QR code';
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_fazendas_placas_so_admin on fazendas;
+create trigger trg_fazendas_placas_so_admin before update of placas_liberadas on fazendas
+  for each row execute function fazendas_placas_so_admin();
+create or replace function placas_da_fazenda_liberadas(p_fazenda uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select placas_liberadas from fazendas where id = p_fazenda), false)
+$$;
+revoke execute on function placas_da_fazenda_liberadas(uuid) from public, anon, authenticated;
+-- administrador: liberar ou retirar (fica no registro de ações do painel)
+create or replace function admin_liberar_placas(p_fazenda uuid, p_liberar boolean) returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if not eh_admin() then raise exception 'Apenas administradores'; end if;
+  update fazendas set placas_liberadas = coalesce(p_liberar, false) where id = p_fazenda;
+  if not found then raise exception 'Fazenda não encontrada'; end if;
+  insert into admin_acoes (quem, acao, fazenda_id) values (auth.uid(), case when p_liberar then 'liberou as placas com QR code' else 'retirou as placas com QR code' end, p_fazenda);
+  return coalesce(p_liberar, false);
+end $$;
+revoke execute on function admin_liberar_placas(uuid, boolean) from public, anon;
+grant execute on function admin_liberar_placas(uuid, boolean) to authenticated;
+-- administrador: quais fazendas têm as placas liberadas
+create or replace function admin_placas_liberadas() returns setof uuid
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not eh_admin() then raise exception 'Apenas administradores'; end if;
+  return query select id from fazendas where placas_liberadas;
+end $$;
+revoke execute on function admin_placas_liberadas() from public, anon;
+grant execute on function admin_placas_liberadas() to authenticated;
 
 create table if not exists placas (
   tanque_id uuid primary key references tanques(id) on delete cascade,
@@ -67,6 +110,7 @@ language plpgsql security definer set search_path = public as $$
 declare v_f uuid := current_fazenda(); r placas;
 begin
   if v_f is null or current_papel() is distinct from 'dono' then raise exception 'Apenas o dono cuida das placas com QR code'; end if;
+  if not placas_da_fazenda_liberadas(v_f) then raise exception 'Placas com QR code são um serviço à parte. Fale com o suporte do PisciApp para contratar.'; end if;
   if not exists (select 1 from tanques where id = p_tanque and fazenda_id = v_f) then raise exception 'Tanque não encontrado'; end if;
   insert into placas (tanque_id, fazenda_id, codigo, ligada, mostra_agua, mostra_crescimento, mostra_fases, mostra_whatsapp)
   values (p_tanque, v_f, placa_novo_codigo(), coalesce(p_ligada, false), coalesce(p_agua, true), coalesce(p_crescimento, true), coalesce(p_fases, true), coalesce(p_whatsapp, false))
@@ -86,6 +130,7 @@ language plpgsql security definer set search_path = public as $$
 declare v_f uuid := current_fazenda(); v_c text;
 begin
   if v_f is null or current_papel() is distinct from 'dono' then raise exception 'Apenas o dono cuida das placas com QR code'; end if;
+  if not placas_da_fazenda_liberadas(v_f) then raise exception 'Placas com QR code são um serviço à parte. Fale com o suporte do PisciApp para contratar.'; end if;
   update placas set codigo = placa_novo_codigo(), atualizado_em = now() where tanque_id = p_tanque and fazenda_id = v_f returning codigo into v_c;
   if v_c is null then raise exception 'Este tanque ainda não tem placa'; end if;
   return v_c;
@@ -99,6 +144,7 @@ language plpgsql security definer set search_path = public as $$
 declare v_f uuid := current_fazenda(); v_n text := nullif(regexp_replace(coalesce(p_numero, ''), '[^0-9]', '', 'g'), '');
 begin
   if v_f is null or current_papel() is distinct from 'dono' then raise exception 'Apenas o dono cuida das placas com QR code'; end if;
+  if not placas_da_fazenda_liberadas(v_f) then raise exception 'Placas com QR code são um serviço à parte. Fale com o suporte do PisciApp para contratar.'; end if;
   if v_n is not null and v_n !~ '^[0-9]{10,13}$' then raise exception 'WhatsApp inválido: use o DDD e o número, por exemplo (95) 99999-0000'; end if;
   update fazendas set whatsapp_visitantes = v_n where id = v_f;
   return v_n;
@@ -118,7 +164,7 @@ begin
   if not found then return null; end if;
   select * into v_faz from fazendas where id = p.fazenda_id;
   select * into v_tq from tanques where id = p.tanque_id;
-  if not p.ligada or coalesce(v_faz.bloqueada, false) then
+  if not p.ligada or coalesce(v_faz.bloqueada, false) or not coalesce(v_faz.placas_liberadas, false) then
     return jsonb_build_object('disponivel', false, 'fazenda', v_faz.nome);
   end if;
 

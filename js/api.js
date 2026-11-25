@@ -89,6 +89,18 @@ export function criarApi(client) {
     async salvarPesoVendaTanque(tanqueId, kg) {
       ok(await client.from('tanques').update({ peso_venda_kg: kg }).eq('id', tanqueId));
     },
+    // placas com QR code (sql/43): serviço à parte, liberado por fazenda pelo administrador do sistema
+    async placasLiberadas() {
+      const { data, error } = await client.from('fazendas').select('placas_liberadas').maybeSingle();
+      if (error) { if (/placas_liberadas/i.test(error.message || '')) return false; ok({ error }); }
+      return !!(data && data.placas_liberadas);
+    },
+    async adminLiberarPlacas(fazendaId, liberar) { return ok(await client.rpc('admin_liberar_placas', { p_fazenda: fazendaId, p_liberar: !!liberar })); },
+    async adminPlacasLiberadas() {
+      const { data, error } = await client.rpc('admin_placas_liberadas');
+      if (error) return null; // sql/43 ainda não rodado
+      return new Set((data || []).map((x) => (typeof x === 'string' ? x : x.admin_placas_liberadas || x.id)));
+    },
     // placas com QR code (sql/43): só o dono lê e muda
     async placas() {
       return ok(await client.from('placas').select('*')) || [];
